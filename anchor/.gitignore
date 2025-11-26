@@ -1,0 +1,41 @@
+# Anchor build artifacts
+target/
+
+# Node modules
+node_modules/
+
+# Test validator
+test-ledger/
+
+# TypeScript build output
+dist/
+
+# Keypairs (keep these secret!)
+*.json
+!Anchor.toml
+!package.json
+!tsconfig.json
+!Cargo.toml
+!programs/*/Cargo.toml
+
+# Allow IDL and types (these are useful to commit)
+!target/idl/
+!target/types/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Environment
+.env
+.env.local
