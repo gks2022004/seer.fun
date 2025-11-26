@@ -1,101 +1,236 @@
-import Image from "next/image";
+"use client";
+
+import { useState, useEffect } from "react";
+
+// ASCII Art Logo
+const ASCII_LOGO = `
+███████╗███████╗███████╗██████╗    ███████╗██╗   ██╗███╗   ██╗
+██╔════╝██╔════╝██╔════╝██╔══██╗   ██╔════╝██║   ██║████╗  ██║
+███████╗█████╗  █████╗  ██████╔╝   █████╗  ██║   ██║██╔██╗ ██║
+╚════██║██╔══╝  ██╔══╝  ██╔══██╗   ██╔══╝  ██║   ██║██║╚██╗██║
+███████║███████╗███████╗██║  ██║██╗██║     ╚██████╔╝██║ ╚████║
+╚══════╝╚══════╝╚══════╝╚═╝  ╚═╝╚═╝╚═╝      ╚═════╝ ╚═╝  ╚═══╝
+`;
+
+// Typing effect hook
+function useTypewriter(text: string, speed: number = 50) {
+  const [displayText, setDisplayText] = useState("");
+  const [isComplete, setIsComplete] = useState(false);
+  const [hasStarted, setHasStarted] = useState(false);
+
+  useEffect(() => {
+    // Small delay to ensure hydration is complete
+    const startDelay = setTimeout(() => {
+      setHasStarted(true);
+    }, 100);
+
+    return () => clearTimeout(startDelay);
+  }, []);
+
+  useEffect(() => {
+    if (!hasStarted) return;
+    
+    let index = 0;
+    setDisplayText("");
+    setIsComplete(false);
+
+    const timer = setInterval(() => {
+      if (index < text.length) {
+        setDisplayText(text.slice(0, index + 1));
+        index++;
+      } else {
+        setIsComplete(true);
+        clearInterval(timer);
+      }
+    }, speed);
+
+    return () => clearInterval(timer);
+  }, [text, speed, hasStarted]);
+
+  return { displayText, isComplete };
+}
+
+// Sample market data
+const SAMPLE_MARKETS = [
+  { question: "Will BTC hit $100k by EOY?", yesOdds: 67, volume: "420.69 SOL" },
+  { question: "ETH ETF approved in 2024?", yesOdds: 82, volume: "1,337 SOL" },
+  { question: "Solana flips Ethereum?", yesOdds: 23, volume: "69.42 SOL" },
+];
 
 export default function Home() {
-  return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="https://nextjs.org/icons/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-semibold">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
+  const { displayText, isComplete } = useTypewriter(
+    "PREDICTION_MARKETS.exe loaded... Welcome to the future of betting.",
+    30
+  );
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="https://nextjs.org/icons/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:min-w-44"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+  const [activeMarket, setActiveMarket] = useState(0);
+  const [marketId, setMarketId] = useState("7f3a2b");
+
+  // Generate random ID only on client side
+  useEffect(() => {
+    setMarketId(Math.random().toString(16).slice(2, 8));
+  }, [activeMarket]);
+
+  // Cycle through markets
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setActiveMarket((prev) => (prev + 1) % SAMPLE_MARKETS.length);
+    }, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
+  return (
+    <main className="min-h-screen p-4 md:p-8 flex flex-col">
+      {/* Header */}
+      <header className="flex justify-between items-center mb-8 border-b border-gray-400 pb-4">
+        <div className="font-vt323 text-2xl text-matrix text-glow-green">
+          SEER.FUN
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
+        <nav className="flex gap-4 font-mono text-sm">
+          <a href="#" className="text-gray-400 hover:text-matrix transition-colors">
+            [MARKETS]
+          </a>
+          <a href="#" className="text-gray-400 hover:text-matrix transition-colors">
+            [CREATE]
+          </a>
+          <button className="btn-glitch text-sm py-1 px-3">
+            CONNECT
+          </button>
+        </nav>
+      </header>
+
+      {/* Main Content */}
+      <div className="flex-1 flex flex-col lg:flex-row gap-8">
+        {/* Left Panel - ASCII Logo & Info */}
+        <div className="lg:w-1/2 flex flex-col">
+          {/* ASCII Logo */}
+          <pre className="ascii-art text-xs md:text-sm overflow-x-auto mb-6">
+            {ASCII_LOGO}
+          </pre>
+
+          {/* Typing Terminal */}
+          <div className="terminal-window mb-6">
+            <div className="terminal-header">
+              <span className="terminal-dot bg-cyber"></span>
+              <span className="terminal-dot bg-yellow-500"></span>
+              <span className="terminal-dot bg-matrix"></span>
+              <span className="ml-2 text-gray-400 font-mono text-sm">
+                seer@solana:~
+              </span>
+            </div>
+            <div className="font-mono text-sm">
+              <span className="text-cyber">$ </span>
+              <span>{displayText}</span>
+              {!isComplete && <span className="animate-blink">█</span>}
+            </div>
+          </div>
+
+          {/* Feature List */}
+          <div className="space-y-3 font-mono text-sm">
+            <div className="flex items-center gap-3">
+              <span className="text-matrix">[✓]</span>
+              <span className="text-gray-400">Bet directly from Twitter/X via Blinks</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="text-matrix">[✓]</span>
+              <span className="text-gray-400">Powered by Solana Actions</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="text-matrix">[✓]</span>
+              <span className="text-gray-400">Instant settlement on-chain</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="text-cyber">[◉]</span>
+              <span className="text-matrix">LIVE: {SAMPLE_MARKETS.length} markets</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Right Panel - Live Market Preview */}
+        <div className="lg:w-1/2">
+          <div className="pixel-card h-full">
+            {/* Card Header */}
+            <div className="flex justify-between items-center mb-4 pb-2 border-b border-gray-400">
+              <span className="font-vt323 text-xl text-matrix">
+                ▸ LIVE MARKET
+              </span>
+              <span className="font-mono text-xs text-gray-400">
+                ID: 0x{marketId}
+              </span>
+            </div>
+
+            {/* Market Question */}
+            <h2 className="font-vt323 text-3xl md:text-4xl text-matrix text-glow-green mb-6">
+              {SAMPLE_MARKETS[activeMarket].question}
+            </h2>
+
+            {/* Odds Display */}
+            <div className="mb-6">
+              <div className="flex justify-between font-mono text-sm mb-2">
+                <span className="text-matrix">YES {SAMPLE_MARKETS[activeMarket].yesOdds}%</span>
+                <span className="text-cyber">NO {100 - SAMPLE_MARKETS[activeMarket].yesOdds}%</span>
+              </div>
+              <div className="odds-bar">
+                <div 
+                  className="odds-bar-fill-yes"
+                  style={{ width: `${SAMPLE_MARKETS[activeMarket].yesOdds}%` }}
+                />
+              </div>
+            </div>
+
+            {/* Volume */}
+            <div className="flex justify-between items-center mb-6 font-mono text-sm">
+              <span className="text-gray-400">VOLUME:</span>
+              <span className="text-matrix">{SAMPLE_MARKETS[activeMarket].volume}</span>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="grid grid-cols-2 gap-4">
+              <button className="btn-glitch">
+                BET YES ↑
+              </button>
+              <button className="btn-glitch btn-glitch-pink">
+                BET NO ↓
+              </button>
+            </div>
+
+            {/* Blink Preview */}
+            <div className="mt-6 p-3 border border-dashed border-gray-400 rounded">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-gray-400 font-mono text-xs">BLINK PREVIEW</span>
+                <span className="w-2 h-2 bg-matrix rounded-full animate-pulse"></span>
+              </div>
+              <div className="bg-void p-2 rounded font-mono text-xs">
+                <span className="text-gray-400">https://seer.fun/api/actions/bet/</span>
+                <span className="text-matrix">0x7f3...</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Footer */}
+      <footer className="mt-8 pt-4 border-t border-gray-400">
+        <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+          <div className="font-mono text-xs text-gray-400">
+            <span className="text-matrix">&gt;</span> Built on Solana | Powered by Blinks
+          </div>
+          <div className="flex gap-4 font-mono text-xs">
+            <a href="#" className="text-gray-400 hover:text-matrix transition-colors">
+              [DOCS]
+            </a>
+            <a href="#" className="text-gray-400 hover:text-matrix transition-colors">
+              [GITHUB]
+            </a>
+            <a href="#" className="text-gray-400 hover:text-cyber transition-colors">
+              [TWITTER]
+            </a>
+          </div>
+        </div>
+        <div className="mt-4 font-vt323 text-center text-gray-400 text-sm">
+          ═══════════════════════════════════════════════════════
+        </div>
       </footer>
-    </div>
+    </main>
   );
 }
