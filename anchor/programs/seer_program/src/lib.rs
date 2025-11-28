@@ -28,12 +28,9 @@ pub mod seer_program {
         market.bump = ctx.bumps.market;
         market.total_bettors = 0;
 
-        emit!(MarketCreated {
-            market: market.key(),
-            creator: market.creator,
-            question: market.question.clone(),
-            end_time: market.end_time,
-        });
+        msg!("Market created: {}", market.key());
+        msg!("Creator: {}", market.creator);
+        msg!("End time: {}", market.end_time);
 
         Ok(())
     }

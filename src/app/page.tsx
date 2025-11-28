@@ -1,15 +1,15 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 
-// ASCII Art Logo
+// ASCII Art Logo - using solid blocks for consistent rendering
 const ASCII_LOGO = `
-███████╗███████╗███████╗██████╗    ███████╗██╗   ██╗███╗   ██╗
-██╔════╝██╔════╝██╔════╝██╔══██╗   ██╔════╝██║   ██║████╗  ██║
-███████╗█████╗  █████╗  ██████╔╝   █████╗  ██║   ██║██╔██╗ ██║
-╚════██║██╔══╝  ██╔══╝  ██╔══██╗   ██╔══╝  ██║   ██║██║╚██╗██║
-███████║███████╗███████╗██║  ██║██╗██║     ╚██████╔╝██║ ╚████║
-╚══════╝╚══════╝╚══════╝╚═╝  ╚═╝╚═╝╚═╝      ╚═════╝ ╚═╝  ╚═══╝
+ ██████ ███████ ███████ ██████      ███████ ██    ██ ███    ██
+██      ██      ██      ██   ██     ██      ██    ██ ████   ██
+ █████  █████   █████   ██████  ██  █████   ██    ██ ██ ██  ██
+     ██ ██      ██      ██   ██     ██      ██    ██ ██  ██ ██
+██████  ███████ ███████ ██   ██     ██       ██████  ██   ████
 `;
 
 // Typing effect hook
@@ -87,15 +87,15 @@ export default function Home() {
           SEER.FUN
         </div>
         <nav className="flex gap-4 font-mono text-sm">
-          <a href="#" className="text-gray-400 hover:text-matrix transition-colors">
+          <Link href="/dashboard" className="text-gray-400 hover:text-matrix transition-colors">
             [MARKETS]
-          </a>
-          <a href="#" className="text-gray-400 hover:text-matrix transition-colors">
+          </Link>
+          <Link href="/dashboard/create" className="text-gray-400 hover:text-matrix transition-colors">
             [CREATE]
-          </a>
-          <button className="btn-glitch text-sm py-1 px-3">
-            CONNECT
-          </button>
+          </Link>
+          <Link href="/dashboard" className="btn-glitch text-sm py-1 px-3">
+            LAUNCH APP
+          </Link>
         </nav>
       </header>
 
