@@ -15,6 +15,7 @@ async function hashQuestion(question: string): Promise<Uint8Array> {
 }
 
 // Helper to show time until end
+// hey there this is Gaurav
 function getTimeUntil(endDate: Date): string {
   const now = new Date();
   const diff = endDate.getTime() - now.getTime();
