@@ -14,6 +14,27 @@ async function hashQuestion(question: string): Promise<Uint8Array> {
   return new Uint8Array(hashBuffer).slice(0, 32);
 }
 
+// Helper to show time until end
+function getTimeUntil(endDate: Date): string {
+  const now = new Date();
+  const diff = endDate.getTime() - now.getTime();
+  
+  if (diff <= 0) return "ended";
+  
+  const hours = Math.floor(diff / (1000 * 60 * 60));
+  const days = Math.floor(hours / 24);
+  const weeks = Math.floor(days / 7);
+  const months = Math.floor(days / 30);
+  
+  if (months > 0) return `in ${months} month${months > 1 ? 's' : ''}`;
+  if (weeks > 0) return `in ${weeks} week${weeks > 1 ? 's' : ''}`;
+  if (days > 0) return `in ${days} day${days > 1 ? 's' : ''}`;
+  if (hours > 0) return `in ${hours} hour${hours > 1 ? 's' : ''}`;
+  
+  const minutes = Math.floor(diff / (1000 * 60));
+  return `in ${minutes} minute${minutes > 1 ? 's' : ''}`;
+}
+
 export default function CreateMarketForm() {
   const router = useRouter();
   const { publicKey, sendTransaction } = useWallet();
@@ -22,8 +43,45 @@ export default function CreateMarketForm() {
   const [question, setQuestion] = useState("");
   const [endDate, setEndDate] = useState("");
   const [endTime, setEndTime] = useState("");
+  const [selectedPreset, setSelectedPreset] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Quick duration presets
+  const durationPresets = [
+    { label: "1 Hour", hours: 1 },
+    { label: "6 Hours", hours: 6 },
+    { label: "1 Day", hours: 24 },
+    { label: "3 Days", hours: 72 },
+    { label: "1 Week", hours: 168 },
+    { label: "2 Weeks", hours: 336 },
+    { label: "1 Month", hours: 720 },
+    { label: "Custom", hours: 0 },
+  ];
+
+  // Apply preset duration
+  const applyPreset = (hours: number, label: string) => {
+    if (hours === 0) {
+      setSelectedPreset("Custom");
+      return;
+    }
+    
+    const futureDate = new Date(Date.now() + hours * 60 * 60 * 1000);
+    setEndDate(futureDate.toISOString().split("T")[0]);
+    setEndTime(futureDate.toTimeString().slice(0, 5));
+    setSelectedPreset(label);
+  };
+
+  // Handle custom date/time change
+  const handleDateChange = (value: string) => {
+    setEndDate(value);
+    setSelectedPreset("Custom");
+  };
+
+  const handleTimeChange = (value: string) => {
+    setEndTime(value);
+    setSelectedPreset("Custom");
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -220,32 +278,78 @@ export default function CreateMarketForm() {
         </div>
 
         {/* End Date/Time */}
-        <div className="grid grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <label className="block font-mono text-sm text-gray-400">
-              END DATE
-            </label>
-            <input
-              type="date"
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-              min={today}
-              className="w-full bg-void border-2 border-gray-700 focus:border-matrix text-white font-mono p-3 transition-colors outline-none"
-              disabled={loading}
-            />
+        <div className="space-y-4">
+          <label className="block font-mono text-sm text-gray-400">
+            MARKET END TIME
+          </label>
+          
+          {/* Quick Presets */}
+          <div className="grid grid-cols-4 gap-2">
+            {durationPresets.map((preset) => (
+              <button
+                key={preset.label}
+                type="button"
+                onClick={() => applyPreset(preset.hours, preset.label)}
+                disabled={loading}
+                className={`py-2 px-3 text-xs font-mono border transition-all ${
+                  selectedPreset === preset.label
+                    ? "border-matrix bg-matrix/20 text-matrix"
+                    : "border-gray-700 text-gray-400 hover:border-gray-500 hover:text-white"
+                }`}
+              >
+                {preset.label}
+              </button>
+            ))}
           </div>
-          <div className="space-y-2">
-            <label className="block font-mono text-sm text-gray-400">
-              END TIME
-            </label>
-            <input
-              type="time"
-              value={endTime}
-              onChange={(e) => setEndTime(e.target.value)}
-              className="w-full bg-void border-2 border-gray-700 focus:border-matrix text-white font-mono p-3 transition-colors outline-none"
-              disabled={loading}
-            />
+
+          {/* Custom Date/Time Inputs */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="block font-mono text-xs text-gray-500">
+                DATE
+              </label>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => handleDateChange(e.target.value)}
+                min={today}
+                className="w-full bg-void border-2 border-gray-700 focus:border-matrix text-white font-mono p-3 transition-colors outline-none [color-scheme:dark]"
+                disabled={loading}
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="block font-mono text-xs text-gray-500">
+                TIME
+              </label>
+              <input
+                type="time"
+                value={endTime}
+                onChange={(e) => handleTimeChange(e.target.value)}
+                className="w-full bg-void border-2 border-gray-700 focus:border-matrix text-white font-mono p-3 transition-colors outline-none [color-scheme:dark]"
+                disabled={loading}
+              />
+            </div>
           </div>
+
+          {/* Selected Time Display */}
+          {endDate && endTime && (
+            <div className="flex items-center gap-2 text-sm font-mono">
+              <span className="text-gray-500">Betting ends:</span>
+              <span className="text-matrix">
+                {new Date(`${endDate}T${endTime}`).toLocaleString(undefined, {
+                  weekday: 'short',
+                  year: 'numeric',
+                  month: 'short',
+                  day: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })}
+              </span>
+              <span className="text-gray-600">
+                ({getTimeUntil(new Date(`${endDate}T${endTime}`))})
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Preview */}
@@ -253,11 +357,6 @@ export default function CreateMarketForm() {
           <div className="border border-matrix/30 bg-matrix/5 p-4">
             <div className="text-xs font-mono text-matrix mb-2">PREVIEW</div>
             <div className="font-mono text-white">{question}</div>
-            {endDate && endTime && (
-              <div className="text-xs font-mono text-gray-400 mt-2">
-                Betting ends: {new Date(`${endDate}T${endTime}`).toLocaleString()}
-              </div>
-            )}
           </div>
         )}
 

@@ -309,7 +309,7 @@ export default function UserPositions() {
                     </div>
                     <div className={winner ? "text-matrix" : "text-gray-400"}>
                       {position.claimed 
-                        ? "✅ CLAIMED" 
+                        ? "CLAIMED" 
                         : winner 
                           ? `${formatSol(winnings)} SOL`
                           : "-"

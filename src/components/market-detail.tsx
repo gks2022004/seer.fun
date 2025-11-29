@@ -112,7 +112,7 @@ export default function MarketDetail({ marketId }: MarketDetailProps) {
             onClick={copyBlinkUrl}
             className="text-gray-400 hover:text-matrix font-mono text-xs border border-gray-700 hover:border-matrix px-3 py-1 transition-colors"
           >
-            📋 COPY BLINK URL
+            COPY BLINK URL
           </button>
         </div>
         
@@ -152,7 +152,7 @@ export default function MarketDetail({ marketId }: MarketDetailProps) {
                       : "border-gray-700 text-gray-400 hover:border-matrix/50"
                   }`}
                 >
-                  <div className="text-3xl mb-2">✅</div>
+                  <div className="text-3xl mb-2"></div>
                   <div className="font-vt323 text-xl">YES</div>
                   <div className="font-mono text-sm opacity-70">{odds.yes}% odds</div>
                 </button>
@@ -164,7 +164,7 @@ export default function MarketDetail({ marketId }: MarketDetailProps) {
                       : "border-gray-700 text-gray-400 hover:border-cyber/50"
                   }`}
                 >
-                  <div className="text-3xl mb-2">❌</div>
+                  <div className="text-3xl mb-2"></div>
                   <div className="font-vt323 text-xl">NO</div>
                   <div className="font-mono text-sm opacity-70">{odds.no}% odds</div>
                 </button>
@@ -231,12 +231,12 @@ export default function MarketDetail({ marketId }: MarketDetailProps) {
               {/* Transaction Status */}
               {txError && (
                 <div className="border border-cyber bg-cyber/10 p-3 text-cyber font-mono text-sm">
-                  ⚠️ {txError}
+                   {txError}
                 </div>
               )}
               {txSuccess && (
                 <div className="border border-matrix bg-matrix/10 p-3 text-matrix font-mono text-sm">
-                  ✅ {txSuccess}
+                   {txSuccess}
                 </div>
               )}
             </div>
@@ -252,7 +252,7 @@ export default function MarketDetail({ marketId }: MarketDetailProps) {
             : "border-cyber bg-cyber/10"
         }`}>
           <h2 className="font-vt323 text-xl mb-2">
-            MARKET RESOLVED: {market.outcome ? "✅ YES" : "❌ NO"} WON
+            MARKET RESOLVED: {market.outcome ? "YES" : "NO"} WON
           </h2>
           <p className="text-gray-400 font-mono text-sm">
             Total pool of {formatSol(market.yesAmount + market.noAmount)} SOL distributed to winners

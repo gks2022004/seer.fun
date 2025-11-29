@@ -5,9 +5,9 @@ import { usePathname } from "next/navigation";
 import WalletButton from "./wallet-button";
 
 const NAV_ITEMS = [
-  { href: "/dashboard", label: "MARKETS", icon: "📊" },
-  { href: "/dashboard/create", label: "CREATE", icon: "➕" },
-  { href: "/dashboard/positions", label: "MY BETS", icon: "🎯" },
+  { href: "/dashboard", label: "MARKETS", icon: "" },
+  { href: "/dashboard/create", label: "CREATE", icon: "" },
+  { href: "/dashboard/positions", label: "MY BETS", icon: "" },
 ];
 
 export default function DashboardLayout({
@@ -23,7 +23,7 @@ export default function DashboardLayout({
       <header className="border-b border-matrix/30 bg-void/95 backdrop-blur sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2 group">
-            <span className="text-2xl">🔮</span>
+            <span className="text-2xl"></span>
             <span className="font-vt323 text-xl text-matrix text-glow-green group-hover:text-white transition-colors">
               SEER.FUN
             </span>
