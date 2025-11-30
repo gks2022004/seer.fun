@@ -72,7 +72,7 @@ export function useMarkets() {
 
       const marketsData: MarketWithPubkey[] = [];
 
-      for (const { pubkey, account } of accounts) {
+      for (const { pubkey } of accounts) {
         try {
           const market = await fetchMarketAccount(pubkey);
           if (market) {

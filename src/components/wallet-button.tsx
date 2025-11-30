@@ -10,14 +10,14 @@ const WalletMultiButton = dynamic(
 );
 
 export default function WalletButton() {
-  const { connected, publicKey } = useWallet();
+  const { connected } = useWallet();
 
   return (
     <div className="wallet-button-wrapper">
       <WalletMultiButton
         style={{
-          backgroundColor: connected ? "#00FF41" : "#1a1a1a",
-          color: connected ? "#050505" : "#00FF41",
+          backgroundColor: connected ? "#1a1a1a" : "#1a1a1a",
+          color: "#ffffff",
           border: "1px solid #00FF41",
           fontFamily: "var(--font-vt323), monospace",
           fontSize: "14px",
@@ -52,6 +52,10 @@ export default function WalletButton() {
         }
         .wallet-adapter-button {
           font-family: var(--font-vt323), monospace !important;
+          color: #ffffff !important;
+        }
+        .wallet-adapter-button-start-icon {
+          color: #ffffff !important;
         }
       `}</style>
     </div>

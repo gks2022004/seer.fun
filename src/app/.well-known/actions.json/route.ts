@@ -1,5 +1,12 @@
-import { ACTIONS_CORS_HEADERS, ActionsJson } from "@solana/actions";
+import { ACTIONS_CORS_HEADERS, ActionsJson, BLOCKCHAIN_IDS } from "@solana/actions";
 import { NextResponse } from "next/server";
+
+// Headers per Dialect Blink specification
+const headers = {
+  ...ACTIONS_CORS_HEADERS,
+  "x-action-version": "2.4",
+  "x-blockchain-ids": BLOCKCHAIN_IDS.devnet, // Change to mainnet for production
+};
 
 export async function GET() {
   const payload: ActionsJson = {
@@ -17,9 +24,7 @@ export async function GET() {
     ],
   };
 
-  return NextResponse.json(payload, {
-    headers: ACTIONS_CORS_HEADERS,
-  });
+  return NextResponse.json(payload, { headers });
 }
 
 export const OPTIONS = GET;

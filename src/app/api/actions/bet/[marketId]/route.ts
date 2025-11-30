@@ -4,8 +4,9 @@ import {
   ActionPostResponse,
   ACTIONS_CORS_HEADERS,
   createPostResponse,
+  BLOCKCHAIN_IDS,
 } from "@solana/actions";
-import { PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
+import { PublicKey } from "@solana/web3.js";
 import {
   fetchMarketAccount,
   createBetTransaction,
@@ -16,6 +17,13 @@ import {
 
 // Bet amounts in SOL
 const BET_AMOUNTS = [0.1, 0.5, 1, 5];
+
+// Headers per Dialect Blink specification
+const headers = {
+  ...ACTIONS_CORS_HEADERS,
+  "x-action-version": "2.4",
+  "x-blockchain-ids": BLOCKCHAIN_IDS.devnet, // Change to mainnet for production
+};
 
 export const GET = async (
   req: Request,
@@ -31,7 +39,7 @@ export const GET = async (
     } catch {
       return Response.json(
         { error: "Invalid market ID" },
-        { status: 400, headers: ACTIONS_CORS_HEADERS }
+        { status: 400, headers }
       );
     }
 
@@ -41,7 +49,7 @@ export const GET = async (
     if (!market) {
       return Response.json(
         { error: "Market not found" },
-        { status: 404, headers: ACTIONS_CORS_HEADERS }
+        { status: 404, headers }
       );
     }
 
@@ -54,7 +62,7 @@ export const GET = async (
           resolved: true,
           outcome: market.outcome
         },
-        { status: 400, headers: ACTIONS_CORS_HEADERS }
+        { status: 400, headers }
       );
     }
 
@@ -73,7 +81,7 @@ export const GET = async (
       time: timeRemaining,
     }).toString();
 
-    // Create action buttons
+    // Create action buttons per Dialect spec
     const payload: ActionGetResponse = {
       type: "action",
       icon: ogImageUrl,
@@ -94,7 +102,7 @@ export const GET = async (
             href: `/api/actions/bet/${marketId}?amount=${amount}&side=no`,
             type: "transaction" as const,
           })),
-          // Custom amount
+          // Custom amount with parameters
           {
             label: "Custom Bet",
             href: `/api/actions/bet/${marketId}?amount={amount}&side={side}`,
@@ -122,12 +130,12 @@ export const GET = async (
       },
     };
 
-    return Response.json(payload, { headers: ACTIONS_CORS_HEADERS });
+    return Response.json(payload, { headers });
   } catch (error) {
     console.error("GET Error:", error);
     return Response.json(
       { error: "Failed to fetch market" },
-      { status: 500, headers: ACTIONS_CORS_HEADERS }
+      { status: 500, headers }
     );
   }
 };
@@ -147,7 +155,7 @@ export const POST = async (
     if (!amountStr || !side) {
       return Response.json(
         { error: "Missing amount or side parameter" },
-        { status: 400, headers: ACTIONS_CORS_HEADERS }
+        { status: 400, headers }
       );
     }
 
@@ -155,14 +163,14 @@ export const POST = async (
     if (isNaN(amount) || amount <= 0) {
       return Response.json(
         { error: "Invalid bet amount" },
-        { status: 400, headers: ACTIONS_CORS_HEADERS }
+        { status: 400, headers }
       );
     }
 
     if (side !== "yes" && side !== "no") {
       return Response.json(
         { error: "Side must be 'yes' or 'no'" },
-        { status: 400, headers: ACTIONS_CORS_HEADERS }
+        { status: 400, headers }
       );
     }
 
@@ -173,7 +181,7 @@ export const POST = async (
     } catch {
       return Response.json(
         { error: "Invalid market ID" },
-        { status: 400, headers: ACTIONS_CORS_HEADERS }
+        { status: 400, headers }
       );
     }
 
@@ -185,7 +193,7 @@ export const POST = async (
     } catch {
       return Response.json(
         { error: "Invalid account" },
-        { status: 400, headers: ACTIONS_CORS_HEADERS }
+        { status: 400, headers }
       );
     }
 
@@ -194,14 +202,14 @@ export const POST = async (
     if (!market) {
       return Response.json(
         { error: "Market not found" },
-        { status: 404, headers: ACTIONS_CORS_HEADERS }
+        { status: 404, headers }
       );
     }
 
     if (market.resolved) {
       return Response.json(
         { error: "Market has been resolved" },
-        { status: 400, headers: ACTIONS_CORS_HEADERS }
+        { status: 400, headers }
       );
     }
 
@@ -210,7 +218,7 @@ export const POST = async (
     if (now >= Number(market.endTime)) {
       return Response.json(
         { error: "Betting period has ended" },
-        { status: 400, headers: ACTIONS_CORS_HEADERS }
+        { status: 400, headers }
       );
     }
 
@@ -223,7 +231,7 @@ export const POST = async (
       betYes
     );
 
-    // Create response with transaction
+    // Create response with transaction per Dialect spec
     const sideLabel = betYes ? "YES" : "NO";
     const payload: ActionPostResponse = await createPostResponse({
       fields: {
@@ -233,17 +241,17 @@ export const POST = async (
       },
     });
 
-    return Response.json(payload, { headers: ACTIONS_CORS_HEADERS });
+    return Response.json(payload, { headers });
   } catch (error) {
     console.error("POST Error:", error);
     return Response.json(
       { error: "Failed to create transaction" },
-      { status: 500, headers: ACTIONS_CORS_HEADERS }
+      { status: 500, headers }
     );
   }
 };
 
 // Required for CORS preflight
 export const OPTIONS = async () => {
-  return new Response(null, { headers: ACTIONS_CORS_HEADERS });
+  return new Response(null, { headers });
 };

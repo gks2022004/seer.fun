@@ -10,12 +10,14 @@ import { SEER_PROGRAM_ID } from "@/lib/seer-program";
 async function hashQuestion(question: string): Promise<Uint8Array> {
   const encoder = new TextEncoder();
   const data = encoder.encode(question);
-  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+  // Create a proper ArrayBuffer from the Uint8Array
+  const buffer = new ArrayBuffer(data.length);
+  new Uint8Array(buffer).set(data);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", buffer);
   return new Uint8Array(hashBuffer).slice(0, 32);
 }
 
-// Helper to show time until end
-// hey there this is Gaurav
+// Helper to show time until end date
 function getTimeUntil(endDate: Date): string {
   const now = new Date();
   const diff = endDate.getTime() - now.getTime();
@@ -125,7 +127,7 @@ export default function CreateMarketForm() {
       const programId = new PublicKey(SEER_PROGRAM_ID);
 
       // Derive Market PDA
-      const [marketPda, marketBump] = PublicKey.findProgramAddressSync(
+      const [marketPda] = PublicKey.findProgramAddressSync(
         [
           Buffer.from("market"),
           publicKey.toBuffer(),
@@ -195,7 +197,7 @@ export default function CreateMarketForm() {
           throw new Error(`Simulation failed: ${JSON.stringify(simulation.value.err)}`);
         }
         console.log("Simulation successful:", simulation.value.logs);
-      } catch (simError: any) {
+      } catch (simError) {
         console.error("Simulation failed:", simError);
         // Check if program exists
         const programInfo = await connection.getAccountInfo(programId);
@@ -212,12 +214,12 @@ export default function CreateMarketForm() {
 
       // Redirect to the new market
       router.push(`/dashboard/market/${marketPda.toBase58()}`);
-    } catch (e: any) {
+    } catch (e) {
       console.error("Error creating market:", e);
       
       // Parse error message
       let errorMessage = "Failed to create market";
-      if (e.message) {
+      if (e instanceof Error && e.message) {
         if (e.message.includes("Simulation failed")) {
           errorMessage = e.message;
         } else if (e.message.includes("User rejected")) {

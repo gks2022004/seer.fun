@@ -7,7 +7,6 @@ import {
   LAMPORTS_PER_SOL,
 } from "@solana/web3.js";
 import { SEER_PROGRAM_ID, type MarketAccount } from "./seer-program";
-import * as borsh from "borsh";
 
 // RPC endpoint (use devnet for testing, mainnet for production)
 export const SOLANA_RPC = process.env.SOLANA_RPC_URL || "https://api.devnet.solana.com";
@@ -34,41 +33,6 @@ export function getUserPositionPDA(
     [Buffer.from("position"), marketPubkey.toBuffer(), bettorPubkey.toBuffer()],
     programId
   );
-}
-
-// Market account borsh schema for deserialization
-class MarketSchema {
-  creator: Uint8Array;
-  question: string;
-  yes_amount: bigint;
-  no_amount: bigint;
-  resolved: boolean;
-  outcome: boolean;
-  end_time: bigint;
-  bump: number;
-  total_bettors: number;
-
-  constructor(props: {
-    creator: Uint8Array;
-    question: string;
-    yes_amount: bigint;
-    no_amount: bigint;
-    resolved: boolean;
-    outcome: boolean;
-    end_time: bigint;
-    bump: number;
-    total_bettors: number;
-  }) {
-    this.creator = props.creator;
-    this.question = props.question;
-    this.yes_amount = props.yes_amount;
-    this.no_amount = props.no_amount;
-    this.resolved = props.resolved;
-    this.outcome = props.outcome;
-    this.end_time = props.end_time;
-    this.bump = props.bump;
-    this.total_bettors = props.total_bettors;
-  }
 }
 
 // Manually decode market account data
@@ -231,4 +195,45 @@ export function formatTimeRemaining(endTime: bigint): string {
   if (days > 0) return `${days}d ${hours}h`;
   if (hours > 0) return `${hours}h ${minutes}m`;
   return `${minutes}m`;
+}
+
+// Create claim_winnings instruction
+export function createClaimWinningsInstruction(
+  bettor: PublicKey,
+  market: PublicKey
+): TransactionInstruction {
+  const [marketVault] = getMarketVaultPDA(market);
+  const [userPosition] = getUserPositionPDA(market, bettor);
+
+  // claim_winnings discriminator: [161, 215, 24, 59, 14, 236, 242, 221]
+  const discriminator = Buffer.from([161, 215, 24, 59, 14, 236, 242, 221]);
+
+  return new TransactionInstruction({
+    keys: [
+      { pubkey: bettor, isSigner: true, isWritable: true },
+      { pubkey: market, isSigner: false, isWritable: false },
+      { pubkey: marketVault, isSigner: false, isWritable: true },
+      { pubkey: userPosition, isSigner: false, isWritable: true },
+      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+    ],
+    programId,
+    data: discriminator,
+  });
+}
+
+// Create claim winnings transaction
+export async function createClaimTransaction(
+  bettor: PublicKey,
+  market: PublicKey
+): Promise<Transaction> {
+  const transaction = new Transaction();
+  const instruction = createClaimWinningsInstruction(bettor, market);
+  transaction.add(instruction);
+
+  const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
+  transaction.recentBlockhash = blockhash;
+  transaction.lastValidBlockHeight = lastValidBlockHeight;
+  transaction.feePayer = bettor;
+
+  return transaction;
 }

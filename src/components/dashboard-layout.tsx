@@ -77,7 +77,7 @@ export default function DashboardLayout({
       <footer className="border-t border-matrix/30 py-4">
         <div className="max-w-7xl mx-auto px-4 flex items-center justify-between text-xs text-gray-500 font-mono">
           <span>SEER.FUN v0.1.0 // DEVNET</span>
-          <span>POWERED BY ◎ SOLANA</span>
+          <span>POWERED BY SOLANA</span>
         </div>
       </footer>
     </div>

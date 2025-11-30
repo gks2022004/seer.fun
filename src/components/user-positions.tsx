@@ -168,9 +168,9 @@ export default function UserPositions() {
 
       // Refresh positions
       fetchPositions();
-    } catch (e: any) {
+    } catch (e) {
       console.error("Error claiming winnings:", e);
-      setError(e.message || "Failed to claim winnings");
+      setError(e instanceof Error ? e.message : "Failed to claim winnings");
     } finally {
       setClaiming(null);
     }
@@ -223,6 +223,17 @@ export default function UserPositions() {
     );
   }
 
+  // Calculate summary stats
+  const totalBet = positions.reduce((acc, p) => acc + p.yesAmount + p.noAmount, BigInt(0));
+  const totalWinnings = positions.reduce((acc, p) => {
+    if (p.marketResolved && isWinner(p)) {
+      return acc + calculateWinnings(p);
+    }
+    return acc;
+  }, BigInt(0));
+  const pendingClaims = positions.filter(p => p.marketResolved && isWinner(p) && !p.claimed);
+  const activePositions = positions.filter(p => !p.marketResolved);
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between mb-6">
@@ -231,11 +242,50 @@ export default function UserPositions() {
         </h1>
         <button
           onClick={fetchPositions}
-          className="text-gray-400 hover:text-matrix transition-colors p-2"
+          className="btn-cyber text-sm py-2 px-4"
         >
-          🔄
+          REFRESH
         </button>
       </div>
+
+      {/* Summary Stats */}
+      {positions.length > 0 && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+          <div className="bg-void/50 p-4 border border-gray-800">
+            <div className="text-gray-500 text-xs font-mono">TOTAL BET</div>
+            <div className="font-vt323 text-xl text-white">{formatSol(totalBet)} SOL</div>
+          </div>
+          <div className="bg-void/50 p-4 border border-gray-800">
+            <div className="text-gray-500 text-xs font-mono">TOTAL WON</div>
+            <div className="font-vt323 text-xl text-matrix">{formatSol(totalWinnings)} SOL</div>
+          </div>
+          <div className="bg-void/50 p-4 border border-gray-800">
+            <div className="text-gray-500 text-xs font-mono">ACTIVE BETS</div>
+            <div className="font-vt323 text-xl text-yellow-400">{activePositions.length}</div>
+          </div>
+          <div className="bg-void/50 p-4 border border-gray-800">
+            <div className="text-gray-500 text-xs font-mono">PENDING CLAIMS</div>
+            <div className={`font-vt323 text-xl ${pendingClaims.length > 0 ? "text-matrix animate-pulse" : "text-gray-400"}`}>
+              {pendingClaims.length}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Pending Claims Alert */}
+      {pendingClaims.length > 0 && (
+        <div className="border border-matrix bg-matrix/10 p-4 flex items-center justify-between">
+          <div>
+            <div className="font-vt323 text-lg text-matrix">YOU HAVE UNCLAIMED WINNINGS!</div>
+            <div className="text-gray-400 font-mono text-sm">
+              {pendingClaims.length} position{pendingClaims.length > 1 ? 's' : ''} ready to claim
+            </div>
+          </div>
+          <div className="font-vt323 text-xl text-matrix">
+            {formatSol(pendingClaims.reduce((acc, p) => acc + calculateWinnings(p), BigInt(0)))} SOL
+          </div>
+        </div>
+      )}
 
       {error && (
         <div className="border border-cyber bg-cyber/10 p-4 text-cyber font-mono text-sm mb-4">
