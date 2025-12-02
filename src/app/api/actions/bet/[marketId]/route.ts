@@ -23,6 +23,7 @@ const headers = {
   ...ACTIONS_CORS_HEADERS,
   "x-action-version": "2.4",
   "x-blockchain-ids": BLOCKCHAIN_IDS.devnet, // Change to mainnet for production
+  "ngrok-skip-browser-warning": "true", // Skip ngrok warning page for testing
 };
 
 export const GET = async (
