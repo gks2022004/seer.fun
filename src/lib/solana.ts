@@ -3,6 +3,8 @@ import {
   PublicKey,
   Transaction,
   TransactionInstruction,
+  TransactionMessage,
+  VersionedTransaction,
   SystemProgram,
   LAMPORTS_PER_SOL,
 } from "@solana/web3.js";
@@ -159,6 +161,30 @@ export async function createBetTransaction(
   transaction.feePayer = bettor;
 
   return transaction;
+}
+
+// Create VersionedTransaction for placing a bet (required by Dialect Blinks)
+export async function createBetVersionedTransaction(
+  bettor: PublicKey,
+  market: PublicKey,
+  amountSol: number,
+  betYes: boolean
+): Promise<VersionedTransaction> {
+  const amountLamports = Math.floor(amountSol * LAMPORTS_PER_SOL);
+  const instruction = createPlaceBetInstruction(bettor, market, amountLamports, betYes);
+  
+  // Get latest blockhash
+  const { blockhash } = await connection.getLatestBlockhash();
+  
+  // Create a transaction message
+  const message = new TransactionMessage({
+    payerKey: bettor,
+    recentBlockhash: blockhash,
+    instructions: [instruction],
+  }).compileToV0Message();
+  
+  // Create and return a versioned transaction
+  return new VersionedTransaction(message);
 }
 
 // Format SOL amount for display

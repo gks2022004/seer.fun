@@ -1,31 +1,41 @@
+// file: src/app/api/actions/bet/[marketId]/route.ts
+
 import {
   ActionGetResponse,
   ActionPostRequest,
   ActionPostResponse,
   ACTIONS_CORS_HEADERS,
-  createPostResponse,
   BLOCKCHAIN_IDS,
 } from "@solana/actions";
 import { PublicKey } from "@solana/web3.js";
 import {
   fetchMarketAccount,
-  createBetTransaction,
+  createBetVersionedTransaction,
   formatSol,
   calculateOdds,
   formatTimeRemaining,
 } from "@/lib/solana";
 
 // Bet amounts in SOL
-const BET_AMOUNTS = [0.1, 0.5, 1, 5];
+const BET_AMOUNTS = [0.1, 0.5, 1];
 
-// Headers per Dialect Blink specification
+// CAIP-2 format for Solana devnet
+const blockchain = BLOCKCHAIN_IDS.devnet;
+
+// Create headers with CAIP blockchain ID
 const headers = {
   ...ACTIONS_CORS_HEADERS,
+  "x-blockchain-ids": blockchain,
   "x-action-version": "2.4",
-  "x-blockchain-ids": BLOCKCHAIN_IDS.devnet, // Change to mainnet for production
-  "ngrok-skip-browser-warning": "true", // Skip ngrok warning page for testing
 };
 
+// OPTIONS endpoint is required for CORS preflight requests
+// Your Blink won't render if you don't add this
+export const OPTIONS = async () => {
+  return new Response(null, { headers });
+};
+
+// GET endpoint returns the Blink metadata (JSON) and UI configuration
 export const GET = async (
   req: Request,
   { params }: { params: Promise<{ marketId: string }> }
@@ -38,8 +48,8 @@ export const GET = async (
     try {
       marketPubkey = new PublicKey(marketId);
     } catch {
-      return Response.json(
-        { error: "Invalid market ID" },
+      return new Response(
+        JSON.stringify({ error: "Invalid market ID" }),
         { status: 400, headers }
       );
     }
@@ -48,22 +58,9 @@ export const GET = async (
     const market = await fetchMarketAccount(marketPubkey);
     
     if (!market) {
-      return Response.json(
-        { error: "Market not found" },
+      return new Response(
+        JSON.stringify({ error: "Market not found" }),
         { status: 404, headers }
-      );
-    }
-
-    // Check if market is still active
-    if (market.resolved) {
-      const outcome = market.outcome ? "YES" : "NO";
-      return Response.json(
-        { 
-          error: `Market resolved: ${outcome} won`,
-          resolved: true,
-          outcome: market.outcome
-        },
-        { status: 400, headers }
       );
     }
 
@@ -82,44 +79,62 @@ export const GET = async (
       time: timeRemaining,
     }).toString();
 
-    // Create action buttons per Dialect spec
-    const payload: ActionGetResponse = {
+    // Handle resolved markets - still show info but with disabled actions
+    if (market.resolved) {
+      const outcome = market.outcome ? "YES" : "NO";
+      const response: ActionGetResponse = {
+        type: "action",
+        icon: ogImageUrl,
+        title: `[RESOLVED] ${market.question}`,
+        description: `✅ ${outcome} WON | Final Pool: ${totalPool} SOL`,
+        label: "Market Resolved",
+        disabled: true,
+        error: {
+          message: `This market has been resolved. ${outcome} won!`,
+        },
+      };
+      return new Response(JSON.stringify(response), { status: 200, headers });
+    }
+
+    // This JSON is used to render the Blink UI
+    const response: ActionGetResponse = {
       type: "action",
       icon: ogImageUrl,
-      title: `${market.question}`,
+      title: market.question,
       description: `YES: ${odds.yes}% | NO: ${odds.no}% | Pool: ${totalPool} SOL | ⏱ ${timeRemaining}`,
       label: "Place Bet",
+      // Links is used if you have multiple actions or need more than one param
       links: {
         actions: [
           // YES bets
           ...BET_AMOUNTS.map((amount) => ({
+            type: "transaction" as const,
             label: `YES ${amount} SOL`,
             href: `/api/actions/bet/${marketId}?amount=${amount}&side=yes`,
-            type: "transaction" as const,
           })),
           // NO bets
           ...BET_AMOUNTS.map((amount) => ({
+            type: "transaction" as const,
             label: `NO ${amount} SOL`,
             href: `/api/actions/bet/${marketId}?amount=${amount}&side=no`,
-            type: "transaction" as const,
           })),
           // Custom amount with parameters
           {
+            type: "transaction" as const,
             label: "Custom Bet",
             href: `/api/actions/bet/${marketId}?amount={amount}&side={side}`,
-            type: "transaction" as const,
             parameters: [
               {
                 name: "amount",
-                label: "Amount (SOL)",
+                label: "Enter SOL amount",
+                type: "number" as const,
                 required: true,
-                type: "number",
               },
               {
                 name: "side",
-                label: "Side (yes/no)",
+                label: "Pick a side",
+                type: "select" as const,
                 required: true,
-                type: "select",
                 options: [
                   { label: "YES", value: "yes" },
                   { label: "NO", value: "no" },
@@ -131,16 +146,18 @@ export const GET = async (
       },
     };
 
-    return Response.json(payload, { headers });
+    // Return the response with proper headers
+    return new Response(JSON.stringify(response), { status: 200, headers });
   } catch (error) {
     console.error("GET Error:", error);
-    return Response.json(
-      { error: "Failed to fetch market" },
+    return new Response(
+      JSON.stringify({ error: "Failed to fetch market" }),
       { status: 500, headers }
     );
   }
 };
 
+// POST endpoint handles the actual transaction creation
 export const POST = async (
   req: Request,
   { params }: { params: Promise<{ marketId: string }> }
@@ -149,28 +166,28 @@ export const POST = async (
     const { marketId } = await params;
     const url = new URL(req.url);
     
-    // Parse query params
+    // Step 1: Extract parameters from the URL
     const amountStr = url.searchParams.get("amount");
     const side = url.searchParams.get("side");
 
     if (!amountStr || !side) {
-      return Response.json(
-        { error: "Missing amount or side parameter" },
+      return new Response(
+        JSON.stringify({ error: "Missing amount or side parameter" }),
         { status: 400, headers }
       );
     }
 
     const amount = parseFloat(amountStr);
     if (isNaN(amount) || amount <= 0) {
-      return Response.json(
-        { error: "Invalid bet amount" },
+      return new Response(
+        JSON.stringify({ error: "Invalid bet amount" }),
         { status: 400, headers }
       );
     }
 
     if (side !== "yes" && side !== "no") {
-      return Response.json(
-        { error: "Side must be 'yes' or 'no'" },
+      return new Response(
+        JSON.stringify({ error: "Side must be 'yes' or 'no'" }),
         { status: 400, headers }
       );
     }
@@ -180,20 +197,20 @@ export const POST = async (
     try {
       marketPubkey = new PublicKey(marketId);
     } catch {
-      return Response.json(
-        { error: "Invalid market ID" },
+      return new Response(
+        JSON.stringify({ error: "Invalid market ID" }),
         { status: 400, headers }
       );
     }
 
-    // Get bettor from request body
-    const body: ActionPostRequest = await req.json();
-    let bettorPubkey: PublicKey;
+    // Payer public key is passed in the request body
+    const request: ActionPostRequest = await req.json();
+    let payer: PublicKey;
     try {
-      bettorPubkey = new PublicKey(body.account);
+      payer = new PublicKey(request.account);
     } catch {
-      return Response.json(
-        { error: "Invalid account" },
+      return new Response(
+        JSON.stringify({ error: "Invalid account" }),
         { status: 400, headers }
       );
     }
@@ -201,15 +218,15 @@ export const POST = async (
     // Verify market exists and is active
     const market = await fetchMarketAccount(marketPubkey);
     if (!market) {
-      return Response.json(
-        { error: "Market not found" },
+      return new Response(
+        JSON.stringify({ error: "Market not found" }),
         { status: 404, headers }
       );
     }
 
     if (market.resolved) {
-      return Response.json(
-        { error: "Market has been resolved" },
+      return new Response(
+        JSON.stringify({ error: "Market has been resolved" }),
         { status: 400, headers }
       );
     }
@@ -217,42 +234,34 @@ export const POST = async (
     // Check if betting period has ended
     const now = Math.floor(Date.now() / 1000);
     if (now >= Number(market.endTime)) {
-      return Response.json(
-        { error: "Betting period has ended" },
+      return new Response(
+        JSON.stringify({ error: "Betting period has ended" }),
         { status: 400, headers }
       );
     }
 
-    // Create the bet transaction
+    // Step 2: Prepare the transaction
     const betYes = side === "yes";
-    const transaction = await createBetTransaction(
-      bettorPubkey,
+    const transaction = await createBetVersionedTransaction(
+      payer,
       marketPubkey,
       amount,
       betYes
     );
 
-    // Create response with transaction per Dialect spec
-    const sideLabel = betYes ? "YES" : "NO";
-    const payload: ActionPostResponse = await createPostResponse({
-      fields: {
-        type: "transaction",
-        transaction,
-        message: `Placing ${amount} SOL bet on ${sideLabel} for "${market.question.slice(0, 50)}..."`,
-      },
-    });
+    // Step 3: Create a response with the serialized transaction
+    const response: ActionPostResponse = {
+      type: "transaction",
+      transaction: Buffer.from(transaction.serialize()).toString("base64"),
+    };
 
-    return Response.json(payload, { headers });
+    // Return the response with proper headers
+    return Response.json(response, { status: 200, headers });
   } catch (error) {
     console.error("POST Error:", error);
-    return Response.json(
-      { error: "Failed to create transaction" },
+    return new Response(
+      JSON.stringify({ error: "Failed to create transaction" }),
       { status: 500, headers }
     );
   }
-};
-
-// Required for CORS preflight
-export const OPTIONS = async () => {
-  return new Response(null, { headers });
 };

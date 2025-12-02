@@ -11,15 +11,15 @@ const headers = {
 export async function GET() {
   const payload: ActionsJson = {
     rules: [
-      // Map bet routes
+      // Map all root level routes to an action
       {
-        pathPattern: "/bet/*",
-        apiPath: "/api/actions/bet/*",
+        pathPattern: "/*",
+        apiPath: "/api/actions/*",
       },
-      // Map market routes (alias)
+      // Idempotent rule as the fallback
       {
-        pathPattern: "/market/*",
-        apiPath: "/api/actions/bet/*",
+        pathPattern: "/api/actions/**",
+        apiPath: "/api/actions/**",
       },
     ],
   };
