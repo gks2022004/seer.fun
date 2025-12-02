@@ -5,7 +5,7 @@ import { useWallet, useConnection } from "@solana/wallet-adapter-react";
 import { PublicKey, Transaction, SystemProgram } from "@solana/web3.js";
 import Link from "next/link";
 import { useSingleMarket, MarketOddsBar, MarketStats, MarketStatusBadge } from "@/hooks/use-markets";
-import { createBetTransaction, formatSol, calculateOdds, getUserPositionPDA, getMarketVaultPDA, programId, connection as solanaConnection } from "@/lib/solana";
+import { createBetTransaction, formatSol, calculateOdds, getUserPositionPDA, getMarketVaultPDA, programId, connection as solanaConnection, createResolveMarketTransaction } from "@/lib/solana";
 import ShareMarket from "./share-market";
 
 const BET_AMOUNTS = [0.1, 0.25, 0.5, 1, 2, 5];
@@ -30,6 +30,7 @@ export default function MarketDetail({ marketId }: MarketDetailProps) {
   const [customAmount, setCustomAmount] = useState("");
   const [placing, setPlacing] = useState(false);
   const [claiming, setClaiming] = useState(false);
+  const [resolving, setResolving] = useState(false);
   const [txError, setTxError] = useState<string | null>(null);
   const [txSuccess, setTxSuccess] = useState<string | null>(null);
   const [userPosition, setUserPosition] = useState<UserPosition | null>(null);
@@ -149,6 +150,34 @@ export default function MarketDetail({ marketId }: MarketDetailProps) {
       setTxError(e instanceof Error ? e.message : "Failed to claim winnings");
     } finally {
       setClaiming(false);
+    }
+  };
+
+  const handleResolveMarket = async (outcome: boolean) => {
+    if (!publicKey || !market) return;
+
+    try {
+      setResolving(true);
+      setTxError(null);
+      setTxSuccess(null);
+
+      const marketPubkey = new PublicKey(marketId);
+      const transaction = await createResolveMarketTransaction(
+        publicKey,
+        marketPubkey,
+        outcome
+      );
+
+      const signature = await sendTransaction(transaction, connection);
+      await connection.confirmTransaction(signature, "confirmed");
+
+      setTxSuccess(`Market resolved as ${outcome ? "YES" : "NO"}! Tx: ${signature.slice(0, 8)}...`);
+      refetch();
+    } catch (e) {
+      console.error("Error resolving market:", e);
+      setTxError(e instanceof Error ? e.message : "Failed to resolve market");
+    } finally {
+      setResolving(false);
     }
   };
 
@@ -363,6 +392,48 @@ export default function MarketDetail({ marketId }: MarketDetailProps) {
                    {txSuccess}
                 </div>
               )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Resolve Market Section - Only for creator when betting has ended */}
+      {publicKey && 
+       !market.resolved && 
+       market.creator === publicKey.toBase58() && 
+       Date.now() / 1000 >= Number(market.endTime) && (
+        <div className="border border-yellow-500 p-6 bg-yellow-500/10">
+          <h2 className="font-vt323 text-xl text-yellow-400 mb-2">RESOLVE MARKET</h2>
+          <p className="text-gray-400 font-mono text-sm mb-4">
+            As the market creator, you can now resolve this market. Choose the winning outcome:
+          </p>
+          
+          <div className="grid grid-cols-2 gap-4 mb-4">
+            <button
+              onClick={() => handleResolveMarket(true)}
+              disabled={resolving}
+              className="py-4 border-2 border-matrix bg-matrix/20 text-matrix font-vt323 text-xl hover:bg-matrix/30 transition-all disabled:opacity-50"
+            >
+              {resolving ? "RESOLVING..." : "RESOLVE: YES WINS"}
+            </button>
+            <button
+              onClick={() => handleResolveMarket(false)}
+              disabled={resolving}
+              className="py-4 border-2 border-cyber bg-cyber/20 text-cyber font-vt323 text-xl hover:bg-cyber/30 transition-all disabled:opacity-50"
+            >
+              {resolving ? "RESOLVING..." : "RESOLVE: NO WINS"}
+            </button>
+          </div>
+
+          {/* Transaction Status */}
+          {txError && (
+            <div className="border border-cyber bg-cyber/10 p-3 text-cyber font-mono text-sm">
+               {txError}
+            </div>
+          )}
+          {txSuccess && (
+            <div className="border border-matrix bg-matrix/10 p-3 text-matrix font-mono text-sm">
+               {txSuccess}
             </div>
           )}
         </div>

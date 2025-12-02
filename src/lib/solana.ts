@@ -237,3 +237,45 @@ export async function createClaimTransaction(
 
   return transaction;
 }
+
+// Create resolve_market instruction
+export function createResolveMarketInstruction(
+  creator: PublicKey,
+  market: PublicKey,
+  outcome: boolean // true = YES wins, false = NO wins
+): TransactionInstruction {
+  // resolve_market discriminator: [155, 23, 80, 173, 46, 74, 23, 239]
+  const discriminator = Buffer.from([155, 23, 80, 173, 46, 74, 23, 239]);
+  
+  // Serialize outcome (1 byte bool)
+  const outcomeBuffer = Buffer.from([outcome ? 1 : 0]);
+  
+  const data = Buffer.concat([discriminator, outcomeBuffer]);
+
+  return new TransactionInstruction({
+    keys: [
+      { pubkey: creator, isSigner: true, isWritable: false },
+      { pubkey: market, isSigner: false, isWritable: true },
+    ],
+    programId,
+    data,
+  });
+}
+
+// Create resolve market transaction
+export async function createResolveMarketTransaction(
+  creator: PublicKey,
+  market: PublicKey,
+  outcome: boolean
+): Promise<Transaction> {
+  const transaction = new Transaction();
+  const instruction = createResolveMarketInstruction(creator, market, outcome);
+  transaction.add(instruction);
+
+  const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
+  transaction.recentBlockhash = blockhash;
+  transaction.lastValidBlockHeight = lastValidBlockHeight;
+  transaction.feePayer = creator;
+
+  return transaction;
+}
