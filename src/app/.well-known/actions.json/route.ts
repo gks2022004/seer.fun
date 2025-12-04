@@ -11,12 +11,19 @@ const headers = {
 export async function GET() {
   const payload: ActionsJson = {
     rules: [
-      // Map all root level routes to an action
+      // Map market detail pages to bet API
+      // When user shares: https://seer-fun.vercel.app/market/ABC123
+      // It maps to: https://seer-fun.vercel.app/api/actions/bet/ABC123
       {
-        pathPattern: "/*",
-        apiPath: "/api/actions/*",
+        pathPattern: "/market/*",
+        apiPath: "/api/actions/bet/*",
       },
-      // Idempotent rule as the fallback
+      // Map dashboard market pages to bet API
+      {
+        pathPattern: "/dashboard/market/*",
+        apiPath: "/api/actions/bet/*",
+      },
+      // Idempotent rule - API paths map to themselves
       {
         pathPattern: "/api/actions/**",
         apiPath: "/api/actions/**",

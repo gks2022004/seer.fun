@@ -173,8 +173,8 @@ export async function createBetVersionedTransaction(
   const amountLamports = Math.floor(amountSol * LAMPORTS_PER_SOL);
   const instruction = createPlaceBetInstruction(bettor, market, amountLamports, betYes);
   
-  // Get latest blockhash
-  const { blockhash } = await connection.getLatestBlockhash();
+  // Get latest blockhash with "confirmed" commitment for faster confirmation
+  const { blockhash } = await connection.getLatestBlockhash("confirmed");
   
   // Create a transaction message
   const message = new TransactionMessage({
