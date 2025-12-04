@@ -86,7 +86,7 @@ export const GET = async (
         type: "action",
         icon: ogImageUrl,
         title: `[RESOLVED] ${market.question}`,
-        description: `✅ ${outcome} WON | Final Pool: ${totalPool} SOL`,
+        description: `${outcome} WON | Final Pool: ${totalPool} SOL`,
         label: "Market Resolved",
         disabled: true,
         error: {
