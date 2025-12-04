@@ -81,7 +81,7 @@ export async function GET(req: NextRequest) {
               border: "1px solid #00FF41",
             }}
           >
-            <span style={{ color: "#888", fontSize: "16px" }}>⏱</span>
+            <span style={{ color: "#888", fontSize: "16px" }}></span>
             <span
               style={{
                 color: "#00FF41",

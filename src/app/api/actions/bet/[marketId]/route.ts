@@ -101,7 +101,7 @@ export const GET = async (
       type: "action",
       icon: ogImageUrl,
       title: market.question,
-      description: `YES: ${odds.yes}% | NO: ${odds.no}% | Pool: ${totalPool} SOL | ⏱ ${timeRemaining}`,
+      description: `YES: ${odds.yes}% | NO: ${odds.no}% | Pool: ${totalPool} SOL | ${timeRemaining}`,
       label: "Place Bet",
       // Links is used if you have multiple actions or need more than one param
       links: {
