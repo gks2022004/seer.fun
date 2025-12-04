@@ -7,6 +7,7 @@ import {
   VersionedTransaction,
   SystemProgram,
   LAMPORTS_PER_SOL,
+  ComputeBudgetProgram,
 } from "@solana/web3.js";
 import { SEER_PROGRAM_ID, type MarketAccount } from "./seer-program";
 
@@ -173,14 +174,23 @@ export async function createBetVersionedTransaction(
   const amountLamports = Math.floor(amountSol * LAMPORTS_PER_SOL);
   const instruction = createPlaceBetInstruction(bettor, market, amountLamports, betYes);
   
+  // Add priority fee instructions for faster confirmation
+  const computeUnitPrice = ComputeBudgetProgram.setComputeUnitPrice({
+    microLamports: 50000, // Priority fee
+  });
+  
+  const computeUnitLimit = ComputeBudgetProgram.setComputeUnitLimit({
+    units: 200000, // Compute units
+  });
+  
   // Get latest blockhash with "confirmed" commitment for faster confirmation
   const { blockhash } = await connection.getLatestBlockhash("confirmed");
   
-  // Create a transaction message
+  // Create a transaction message with priority fee instructions first
   const message = new TransactionMessage({
     payerKey: bettor,
     recentBlockhash: blockhash,
-    instructions: [instruction],
+    instructions: [computeUnitPrice, computeUnitLimit, instruction],
   }).compileToV0Message();
   
   // Create and return a versioned transaction
