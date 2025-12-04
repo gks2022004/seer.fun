@@ -40,7 +40,7 @@ YES: ${odds.yes}% | NO: ${odds.no}%
 Pool: ${pool} SOL
 ${timeStatus}
 
-Bet now on @seer_fun 👇`;
+Bet now on @Seer_fun 👇`;
 
   const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}&url=${encodeURIComponent(dialToUrl)}`;
 
