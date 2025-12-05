@@ -28,7 +28,6 @@ export default function ShareMarket({
 
   // Generate URLs
   const baseUrl = typeof window !== "undefined" ? window.location.origin : "https://seer.fun";
-  const marketUrl = `${baseUrl}/dashboard/market/${marketId}`;
   const blinkUrl = `${baseUrl}/api/actions/bet/${marketId}`;
   const dialToUrl = `https://dial.to/?action=solana-action:${encodeURIComponent(blinkUrl)}`;
 
