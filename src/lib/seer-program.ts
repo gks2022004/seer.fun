@@ -168,7 +168,7 @@ export interface MarketAccount {
   endTime: bigint;
   bump: number;
   totalBettors: number;
-  marketType: { event: {} } | { price: {} };
+  marketType: { event: Record<string, never> } | { price: Record<string, never> };
   pythFeedId: string | null;
   targetPrice: bigint | null;
 }
