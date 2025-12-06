@@ -99,9 +99,10 @@ export async function fetchMarketAccount(
     // Pyth feed ID (1 byte option + 32 bytes if Some)
     const hasPythFeed = data[offset] === 1;
     offset += 1;
-    let pythFeedId: [number[]] | null = null;
+    let pythFeedId: string | null = null;
     if (hasPythFeed) {
-      pythFeedId = [Array.from(data.slice(offset, offset + 32))];
+      const feedIdBytes = data.slice(offset, offset + 32);
+      pythFeedId = "0x" + Buffer.from(feedIdBytes).toString("hex");
       offset += 32;
     }
 
@@ -340,4 +341,83 @@ export async function createResolveMarketTransaction(
   transaction.feePayer = creator;
 
   return transaction;
+}
+
+// Create auto-resolve price market instruction
+export function createAutoResolvePriceMarketInstruction(
+  caller: PublicKey,
+  market: PublicKey,
+  pythPriceAccount: PublicKey
+): TransactionInstruction {
+  // resolve_price_market discriminator: [174, 136, 131, 161, 205, 54, 38, 95]
+  const discriminator = Buffer.from([174, 136, 131, 161, 205, 54, 38, 95]);
+
+  return new TransactionInstruction({
+    keys: [
+      { pubkey: caller, isSigner: true, isWritable: false },
+      { pubkey: market, isSigner: false, isWritable: true },
+      { pubkey: pythPriceAccount, isSigner: false, isWritable: false },
+    ],
+    programId,
+    data: discriminator,
+  });
+}
+
+// Create auto-resolve price market transaction
+export async function createAutoResolvePriceMarketTransaction(
+  caller: PublicKey,
+  market: PublicKey,
+  pythFeedId: string
+): Promise<Transaction> {
+  const transaction = new Transaction();
+
+  // For devnet, Pyth price accounts are derived from the feed ID
+  // The Pyth program on devnet is: gSbePebfvPy7tRqimPoVecS2UsBvYv46ynrzWocc92s
+  const pythProgramId = new PublicKey("gSbePebfvPy7tRqimPoVecS2UsBvYv46ynrzWocc92s");
+  
+  // Derive Pyth price account from feed ID
+  // Feed ID is a hex string, convert to buffer
+  const feedIdBuffer = Buffer.from(pythFeedId.replace("0x", ""), "hex");
+  const [pythPriceAccount] = PublicKey.findProgramAddressSync(
+    [feedIdBuffer],
+    pythProgramId
+  );
+
+  const instruction = createAutoResolvePriceMarketInstruction(
+    caller,
+    market,
+    pythPriceAccount
+  );
+  transaction.add(instruction);
+
+  const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
+  transaction.recentBlockhash = blockhash;
+  transaction.lastValidBlockHeight = lastValidBlockHeight;
+  transaction.feePayer = caller;
+
+  return transaction;
+}
+
+// Fetch current Pyth price for a feed
+export async function fetchPythPrice(pythFeedId: string): Promise<{ price: number; expo: number } | null> {
+  try {
+    const pythProgramId = new PublicKey("gSbePebfvPy7tRqimPoVecS2UsBvYv46ynrzWocc92s");
+    const feedIdBuffer = Buffer.from(pythFeedId.replace("0x", ""), "hex");
+    const [pythPriceAccount] = PublicKey.findProgramAddressSync(
+      [feedIdBuffer],
+      pythProgramId
+    );
+
+    const accountInfo = await connection.getAccountInfo(pythPriceAccount);
+    if (!accountInfo || !accountInfo.data) {
+      return null;
+    }
+
+    // Simplified Pyth price parsing (real implementation would use @pythnetwork/client)
+    // For now, return a placeholder
+    return { price: 0, expo: -8 };
+  } catch (error) {
+    console.error("Error fetching Pyth price:", error);
+    return null;
+  }
 }

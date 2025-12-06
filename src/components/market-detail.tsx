@@ -5,7 +5,8 @@ import { useWallet, useConnection } from "@solana/wallet-adapter-react";
 import { PublicKey, Transaction, SystemProgram } from "@solana/web3.js";
 import Link from "next/link";
 import { useSingleMarket, MarketOddsBar, MarketStats, MarketStatusBadge } from "@/hooks/use-markets";
-import { createBetTransaction, formatSol, calculateOdds, getUserPositionPDA, getMarketVaultPDA, programId, connection as solanaConnection, createResolveMarketTransaction } from "@/lib/solana";
+import { createBetTransaction, formatSol, calculateOdds, getUserPositionPDA, getMarketVaultPDA, programId, connection as solanaConnection, createResolveMarketTransaction, createAutoResolvePriceMarketTransaction } from "@/lib/solana";
+import { PYTH_FEEDS_ARRAY } from "@/lib/pyth-feeds";
 import ShareMarket from "./share-market";
 
 const BET_AMOUNTS = [0.1, 0.25, 0.5, 1, 2, 5];
@@ -31,6 +32,7 @@ export default function MarketDetail({ marketId }: MarketDetailProps) {
   const [placing, setPlacing] = useState(false);
   const [claiming, setClaiming] = useState(false);
   const [resolving, setResolving] = useState(false);
+  const [autoResolving, setAutoResolving] = useState(false);
   const [txError, setTxError] = useState<string | null>(null);
   const [txSuccess, setTxSuccess] = useState<string | null>(null);
   const [userPosition, setUserPosition] = useState<UserPosition | null>(null);
@@ -178,6 +180,34 @@ export default function MarketDetail({ marketId }: MarketDetailProps) {
       setTxError(e instanceof Error ? e.message : "Failed to resolve market");
     } finally {
       setResolving(false);
+    }
+  };
+
+  const handleAutoResolveMarket = async () => {
+    if (!publicKey || !market || !market.pythFeedId) return;
+
+    try {
+      setAutoResolving(true);
+      setTxError(null);
+      setTxSuccess(null);
+
+      const marketPubkey = new PublicKey(marketId);
+      const transaction = await createAutoResolvePriceMarketTransaction(
+        publicKey,
+        marketPubkey,
+        market.pythFeedId
+      );
+
+      const signature = await sendTransaction(transaction, connection);
+      await connection.confirmTransaction(signature, "confirmed");
+
+      setTxSuccess(`Price market auto-resolved! Tx: ${signature.slice(0, 8)}...`);
+      refetch();
+    } catch (e) {
+      console.error("Error auto-resolving market:", e);
+      setTxError(e instanceof Error ? e.message : "Failed to auto-resolve market");
+    } finally {
+      setAutoResolving(false);
     }
   };
 
@@ -397,9 +427,62 @@ export default function MarketDetail({ marketId }: MarketDetailProps) {
         </div>
       )}
 
-      {/* Resolve Market Section - Only for creator when betting has ended */}
+      {/* Auto-Resolve Price Market Section - Anyone can trigger when betting has ended */}
       {publicKey && 
        !market.resolved && 
+       market.marketType && 'price' in market.marketType &&
+       Date.now() / 1000 >= Number(market.endTime) && (
+        <div className="border border-purple-500 p-6 bg-purple-500/10">
+          <h2 className="font-vt323 text-xl text-purple-400 mb-2">AUTO-RESOLVE PRICE MARKET</h2>
+          <p className="text-gray-400 font-mono text-sm mb-2">
+            This is a price-based market that automatically resolves using Pyth Oracle data.
+          </p>
+          {market.pythFeedId && market.targetPrice && (
+            <div className="bg-void/50 p-3 mb-4 border border-gray-800">
+              <div className="grid grid-cols-2 gap-4 text-sm font-mono">
+                <div>
+                  <span className="text-gray-500">ASSET: </span>
+                  <span className="text-white">
+                    {PYTH_FEEDS_ARRAY.find(f => f.id === market.pythFeedId)?.symbol || "Unknown"}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-gray-500">TARGET PRICE: </span>
+                  <span className="text-matrix">${(Number(market.targetPrice) / 100).toLocaleString()}</span>
+                </div>
+              </div>
+            </div>
+          )}
+          <p className="text-gray-400 font-mono text-xs mb-4">
+            Anyone can trigger resolution. The oracle will check if the price reached the target.
+          </p>
+          
+          <button
+            onClick={handleAutoResolveMarket}
+            disabled={autoResolving}
+            className="w-full py-4 border-2 border-purple-500 bg-purple-500/20 text-purple-400 font-vt323 text-xl hover:bg-purple-500/30 transition-all disabled:opacity-50"
+          >
+            {autoResolving ? "AUTO-RESOLVING..." : "AUTO-RESOLVE WITH PYTH ORACLE"}
+          </button>
+
+          {/* Transaction Status */}
+          {txError && (
+            <div className="border border-cyber bg-cyber/10 p-3 text-cyber font-mono text-sm mt-4">
+               {txError}
+            </div>
+          )}
+          {txSuccess && (
+            <div className="border border-matrix bg-matrix/10 p-3 text-matrix font-mono text-sm mt-4">
+               {txSuccess}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Resolve Market Section - Only for creator when betting has ended (Event markets only) */}
+      {publicKey && 
+       !market.resolved && 
+       market.marketType && 'event' in market.marketType &&
        market.creator === publicKey.toBase58() && 
        Date.now() / 1000 >= Number(market.endTime) && (
         <div className="border border-yellow-500 p-6 bg-yellow-500/10">
