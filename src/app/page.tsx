@@ -60,7 +60,7 @@ const SAMPLE_MARKETS = [
 ];
 
 export default function Home() {
-  const { markets } = useMarkets();
+  const { markets, loading } = useMarkets();
   const { displayText, isComplete } = useTypewriter(
     "PREDICTION_MARKETS.exe loaded... Welcome to the future of betting.",
     30
@@ -144,7 +144,9 @@ export default function Home() {
             </div>
             <div className="flex items-center gap-3">
               <span className="text-cyber">[◉]</span>
-              <span className="text-matrix">LIVE: {markets.length} markets</span>
+              <span className="text-matrix">
+                LIVE: {loading ? "..." : markets.length} markets
+              </span>
             </div>
           </div>
         </div>
