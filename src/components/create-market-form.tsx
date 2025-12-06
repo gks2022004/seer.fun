@@ -5,6 +5,7 @@ import { useWallet, useConnection } from "@solana/wallet-adapter-react";
 import { PublicKey, Transaction, SystemProgram } from "@solana/web3.js";
 import { useRouter } from "next/navigation";
 import { SEER_PROGRAM_ID } from "@/lib/seer-program";
+import { PYTH_FEEDS_ARRAY, type PythFeed } from "@/lib/pyth-feeds";
 
 // Hash function using Web Crypto API (browser-compatible)
 async function hashQuestion(question: string): Promise<Uint8Array> {
@@ -47,6 +48,9 @@ export default function CreateMarketForm() {
   const [endDate, setEndDate] = useState("");
   const [endTime, setEndTime] = useState("");
   const [selectedPreset, setSelectedPreset] = useState<string | null>(null);
+  const [marketType, setMarketType] = useState<"event" | "price">("event");
+  const [selectedPythFeed, setSelectedPythFeed] = useState<PythFeed | null>(null);
+  const [targetPrice, setTargetPrice] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -109,6 +113,18 @@ export default function CreateMarketForm() {
       return;
     }
 
+    // Validate price market fields
+    if (marketType === "price") {
+      if (!selectedPythFeed) {
+        setError("Please select a price feed");
+        return;
+      }
+      if (!targetPrice || parseFloat(targetPrice) <= 0) {
+        setError("Please enter a valid target price");
+        return;
+      }
+    }
+
     const endTimestamp = Math.floor(new Date(`${endDate}T${endTime}`).getTime() / 1000);
     const now = Math.floor(Date.now() / 1000);
 
@@ -158,12 +174,48 @@ export default function CreateMarketForm() {
       const endTimeBuffer = Buffer.alloc(8);
       endTimeBuffer.writeBigInt64LE(BigInt(endTimestamp));
 
+      // market_type: enum (1 byte: 0 = Event, 1 = Price)
+      const marketTypeBuffer = Buffer.from([marketType === "event" ? 0 : 1]);
+
+      // pyth_feed_id: Option<String> (1 byte for Some/None + string if Some)
+      let pythFeedBuffer: Buffer;
+      if (marketType === "price" && selectedPythFeed) {
+        const feedIdBytes = Buffer.from(selectedPythFeed.id, "utf-8");
+        const feedIdLenBuffer = Buffer.alloc(4);
+        feedIdLenBuffer.writeUInt32LE(feedIdBytes.length);
+        pythFeedBuffer = Buffer.concat([
+          Buffer.from([1]), // Some
+          feedIdLenBuffer,
+          feedIdBytes,
+        ]);
+      } else {
+        pythFeedBuffer = Buffer.from([0]); // None
+      }
+
+      // target_price: Option<i64> (1 byte for Some/None + i64 if Some)
+      let targetPriceBuffer: Buffer;
+      if (marketType === "price" && targetPrice) {
+        // Convert price to cents (e.g., $100,000.00 -> 10000000)
+        const priceCents = Math.floor(parseFloat(targetPrice) * 100);
+        const priceBuffer = Buffer.alloc(8);
+        priceBuffer.writeBigInt64LE(BigInt(priceCents));
+        targetPriceBuffer = Buffer.concat([
+          Buffer.from([1]), // Some
+          priceBuffer,
+        ]);
+      } else {
+        targetPriceBuffer = Buffer.from([0]); // None
+      }
+
       const data = Buffer.concat([
         discriminator,
         marketIdBuffer,
         questionLenBuffer,
         questionBytes,
         endTimeBuffer,
+        marketTypeBuffer,
+        pythFeedBuffer,
+        targetPriceBuffer,
       ]);
 
       const transaction = new Transaction().add({
@@ -279,6 +331,101 @@ export default function CreateMarketForm() {
             Ask a clear yes/no question that can be resolved definitively
           </p>
         </div>
+
+        {/* Market Type Selection */}
+        <div className="space-y-2">
+          <label className="block font-mono text-sm text-gray-400">
+            MARKET TYPE
+          </label>
+          <div className="grid grid-cols-2 gap-4">
+            <button
+              type="button"
+              onClick={() => {
+                setMarketType("event");
+                setSelectedPythFeed(null);
+                setTargetPrice("");
+              }}
+              disabled={loading}
+              className={`p-4 border-2 transition-all text-left ${
+                marketType === "event"
+                  ? "border-matrix bg-matrix/20"
+                  : "border-gray-700 hover:border-gray-500"
+              }`}
+            >
+              <div className="font-mono text-sm text-white mb-1">EVENT MARKET</div>
+              <div className="text-xs text-gray-400">Manual resolution by creator</div>
+            </button>
+            <button
+              type="button"
+              onClick={() => setMarketType("price")}
+              disabled={loading}
+              className={`p-4 border-2 transition-all text-left ${
+                marketType === "price"
+                  ? "border-matrix bg-matrix/20"
+                  : "border-gray-700 hover:border-gray-500"
+              }`}
+            >
+              <div className="font-mono text-sm text-white mb-1">PRICE MARKET</div>
+              <div className="text-xs text-gray-400">Auto-resolve with Pyth Oracle</div>
+            </button>
+          </div>
+        </div>
+
+        {/* Pyth Feed Selection (Price Markets Only) */}
+        {marketType === "price" && (
+          <>
+            <div className="space-y-2">
+              <label className="block font-mono text-sm text-gray-400">
+                PRICE FEED
+              </label>
+              <select
+                value={selectedPythFeed?.id || ""}
+                onChange={(e) => {
+                  const feed = PYTH_FEEDS_ARRAY.find(f => f.id === e.target.value);
+                  setSelectedPythFeed(feed || null);
+                }}
+                className="w-full bg-void border-2 border-gray-700 focus:border-matrix text-white font-mono p-3 transition-colors outline-none"
+                disabled={loading}
+              >
+                <option value="">Select a price feed...</option>
+                {PYTH_FEEDS_ARRAY.map((feed) => (
+                  <option key={feed.id} value={feed.id}>
+                    {feed.name} - {feed.description}
+                  </option>
+                ))}
+              </select>
+              {selectedPythFeed && (
+                <p className="text-gray-500 text-xs font-mono">
+                  Feed ID: {selectedPythFeed.id.slice(0, 20)}...
+                </p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <label className="block font-mono text-sm text-gray-400">
+                TARGET PRICE (USD)
+              </label>
+              <div className="relative">
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 font-mono">
+                  $
+                </span>
+                <input
+                  type="number"
+                  value={targetPrice}
+                  onChange={(e) => setTargetPrice(e.target.value)}
+                  placeholder="100000.00"
+                  step="0.01"
+                  min="0"
+                  className="w-full bg-void border-2 border-gray-700 focus:border-matrix text-white font-mono p-3 pl-8 transition-colors outline-none"
+                  disabled={loading}
+                />
+              </div>
+              <p className="text-gray-500 text-xs font-mono">
+                Market resolves YES if price reaches this target before end time
+              </p>
+            </div>
+          </>
+        )}
 
         {/* End Date/Time */}
         <div className="space-y-4">
