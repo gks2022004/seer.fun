@@ -89,6 +89,29 @@ export async function fetchMarketAccount(
 
     // Total bettors (4 bytes u32)
     const totalBettors = data.readUInt32LE(offset);
+    offset += 4;
+
+    // Market type (1 byte enum)
+    const marketTypeVariant = data[offset];
+    offset += 1;
+    const marketType = marketTypeVariant === 0 ? { event: {} } : { price: {} };
+
+    // Pyth feed ID (1 byte option + 32 bytes if Some)
+    const hasPythFeed = data[offset] === 1;
+    offset += 1;
+    let pythFeedId: [number[]] | null = null;
+    if (hasPythFeed) {
+      pythFeedId = [Array.from(data.slice(offset, offset + 32))];
+      offset += 32;
+    }
+
+    // Target price (1 byte option + 8 bytes i64 if Some)
+    const hasTargetPrice = data[offset] === 1;
+    offset += 1;
+    let targetPrice: bigint | null = null;
+    if (hasTargetPrice) {
+      targetPrice = data.readBigInt64LE(offset);
+    }
 
     return {
       creator,
@@ -100,6 +123,9 @@ export async function fetchMarketAccount(
       endTime,
       bump,
       totalBettors,
+      marketType,
+      pythFeedId,
+      targetPrice,
     };
   } catch (error) {
     console.error("Error fetching market account:", error);

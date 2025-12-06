@@ -168,4 +168,18 @@ export interface MarketAccount {
   endTime: bigint;
   bump: number;
   totalBettors: number;
+  marketType: { event: {} } | { price: {} };
+  pythFeedId: [number[]] | null;
+  targetPrice: bigint | null;
+}
+
+export type MarketType = "event" | "price";
+
+// Helper to check market type
+export function isEventMarket(market: MarketAccount): boolean {
+  return "event" in market.marketType;
+}
+
+export function isPriceMarket(market: MarketAccount): boolean {
+  return "price" in market.marketType;
 }
