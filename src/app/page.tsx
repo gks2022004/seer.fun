@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useMarkets } from "@/hooks/use-markets";
 
 // ASCII Art Logo - using solid blocks for consistent rendering
 const ASCII_LOGO = `
@@ -59,6 +60,7 @@ const SAMPLE_MARKETS = [
 ];
 
 export default function Home() {
+  const { markets } = useMarkets();
   const { displayText, isComplete } = useTypewriter(
     "PREDICTION_MARKETS.exe loaded... Welcome to the future of betting.",
     30
@@ -142,7 +144,7 @@ export default function Home() {
             </div>
             <div className="flex items-center gap-3">
               <span className="text-cyber">[◉]</span>
-              <span className="text-matrix">LIVE: {SAMPLE_MARKETS.length} markets</span>
+              <span className="text-matrix">LIVE: {markets.length} markets</span>
             </div>
           </div>
         </div>
