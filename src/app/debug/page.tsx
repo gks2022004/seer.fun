@@ -101,11 +101,11 @@ export default function DebugPage() {
         // 8 bytes: end_time
         // 1 byte: bump
         // 4 bytes: total_bettors
-        
+
         const creator = new PublicKey(data.slice(8, 40));
         const questionLen = data.readUInt32LE(40);
         const question = data.slice(44, 44 + questionLen).toString("utf-8");
-        
+
         // Continue from after the actual question string
         const offset = 44 + questionLen;
         const yesAmount = Number(data.readBigUInt64LE(offset));
@@ -147,7 +147,7 @@ export default function DebugPage() {
           const userBet = marketData.outcome === "YES" ? yesAmount : noAmount;
           const winningPool = marketData.outcome === "YES" ? marketData.yesAmount * LAMPORTS_PER_SOL : marketData.noAmount * LAMPORTS_PER_SOL;
           const totalPool = (marketData.yesAmount + marketData.noAmount) * LAMPORTS_PER_SOL;
-          
+
           if (userBet > 0 && winningPool > 0) {
             const winnings = (userBet * totalPool) / winningPool;
             positionData.calculatedWinnings = winnings / LAMPORTS_PER_SOL;
@@ -228,7 +228,7 @@ export default function DebugPage() {
         {debugInfo && (
           <div className="bg-matrix/5 border border-matrix/30 rounded-lg p-6">
             <h2 className="font-display text-2xl text-matrix mb-4">Debug Results</h2>
-            
+
             {debugInfo.error ? (
               <div className="text-red-500">Error: {debugInfo.error}</div>
             ) : (
@@ -299,13 +299,13 @@ export default function DebugPage() {
                 {/* Summary */}
                 <div className="border-t border-matrix/30 pt-4">
                   <h3 className="text-matrix font-bold mb-2">Summary</h3>
-                  {debugInfo.checks.alreadyClaimed ? (
+                  {debugInfo.checks?.alreadyClaimed ? (
                     <div className="text-yellow-500">Winnings have already been claimed!</div>
-                  ) : !debugInfo.checks.marketResolved ? (
+                  ) : !debugInfo.checks?.marketResolved ? (
                     <div className="text-yellow-500">Market is not resolved yet.</div>
-                  ) : !debugInfo.checks.hasWinningPosition ? (
+                  ) : !debugInfo.checks?.hasWinningPosition ? (
                     <div className="text-yellow-500">User did not bet on the winning side.</div>
-                  ) : !debugInfo.checks.vaultHasEnoughFunds ? (
+                  ) : !debugInfo.checks?.vaultHasEnoughFunds ? (
                     <div className="text-red-500">Vault doesn&apos;t have enough funds! This is a critical error.</div>
                   ) : (
                     <div className="text-green-500">User should be able to claim {debugInfo.positionData?.calculatedWinnings?.toFixed(4)} SOL</div>
