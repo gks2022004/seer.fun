@@ -3,15 +3,55 @@
 import { useState } from "react";
 import { Connection, PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
 
+interface MarketData {
+  creator: string;
+  question: string;
+  yesAmount: number;
+  noAmount: number;
+  totalPool: number;
+  resolved: boolean;
+  outcome: string;
+  endTime: string;
+  totalBettors: number;
+}
+
+interface PositionData {
+  yesAmount: number;
+  noAmount: number;
+  claimed: boolean;
+  calculatedWinnings?: number;
+  isWinner?: boolean;
+}
+
+interface DebugInfo {
+  userAddress?: string;
+  userBalance?: number;
+  marketAddress?: string;
+  vaultAddress?: string;
+  vaultBalance?: number;
+  positionAddress?: string;
+  marketExists?: boolean;
+  positionExists?: boolean;
+  marketData?: MarketData | null;
+  positionData?: PositionData | null;
+  checks?: {
+    marketResolved: boolean;
+    hasWinningPosition: boolean;
+    alreadyClaimed: boolean;
+    vaultHasEnoughFunds: boolean;
+  };
+  error?: string;
+}
+
 const PROGRAM_ID = new PublicKey("BwGjxxo2jjAE1aACq4L74L2WzaLjFrxuvvbTMxHyrKbS");
 
 export default function DebugPage() {
   const [address, setAddress] = useState("7aSrqc5h1iUMXiMF8QMyEGQKPwgkX3CKzAuqz9pQDiT5");
   const [marketAddress, setMarketAddress] = useState("");
-  const [debugInfo, setDebugInfo] = useState<any>(null);
+  const [debugInfo, setDebugInfo] = useState<DebugInfo | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const debugClaim = async () => {
+  const debugClaim = async (): Promise<void> => {
     if (!address || !marketAddress) {
       alert("Please enter both addresses");
       return;
@@ -45,7 +85,7 @@ export default function DebugPage() {
       ]);
 
       // Parse market data
-      let marketData: any = null;
+      let marketData: MarketData | null = null;
       if (marketAccount) {
         const data = marketAccount.data;
         // Market structure - Anchor uses variable-length string serialization:
@@ -67,7 +107,7 @@ export default function DebugPage() {
         const question = data.slice(44, 44 + questionLen).toString("utf-8");
         
         // Continue from after the actual question string
-        let offset = 44 + questionLen;
+        const offset = 44 + questionLen;
         const yesAmount = Number(data.readBigUInt64LE(offset));
         const noAmount = Number(data.readBigUInt64LE(offset + 8));
         const resolved = data[offset + 16] === 1;
@@ -89,7 +129,7 @@ export default function DebugPage() {
       }
 
       // Parse position data
-      let positionData: any = null;
+      let positionData: PositionData | null = null;
       if (positionAccount) {
         const data = positionAccount.data;
         const yesAmount = Number(data.readBigUInt64LE(72));
@@ -137,9 +177,10 @@ export default function DebugPage() {
           vaultHasEnoughFunds: vaultBalance >= (positionData?.calculatedWinnings || 0) * LAMPORTS_PER_SOL,
         }
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Debug error:", error);
-      setDebugInfo({ error: error.message });
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      setDebugInfo({ error: errorMessage });
     } finally {
       setLoading(false);
     }
@@ -196,8 +237,8 @@ export default function DebugPage() {
                 <div>
                   <h3 className="text-matrix font-bold mb-2">Account Info</h3>
                   <div className="text-matrix/70 space-y-1">
-                    <div>User Balance: {debugInfo.userBalance.toFixed(4)} SOL</div>
-                    <div>Vault Balance: {debugInfo.vaultBalance.toFixed(4)} SOL</div>
+                    <div>User Balance: {debugInfo.userBalance?.toFixed(4) ?? "N/A"} SOL</div>
+                    <div>Vault Balance: {debugInfo.vaultBalance?.toFixed(4) ?? "N/A"} SOL</div>
                     <div>Vault Address: {debugInfo.vaultAddress}</div>
                   </div>
                 </div>
@@ -240,17 +281,17 @@ export default function DebugPage() {
                 <div>
                   <h3 className="text-matrix font-bold mb-2">Eligibility Checks</h3>
                   <div className="space-y-1">
-                    <div className={debugInfo.checks.marketResolved ? "text-green-500" : "text-red-500"}>
-                      ✓ Market Resolved: {debugInfo.checks.marketResolved ? "PASS" : "FAIL"}
+                    <div className={debugInfo.checks?.marketResolved ? "text-green-500" : "text-red-500"}>
+                      ✓ Market Resolved: {debugInfo.checks?.marketResolved ? "PASS" : "FAIL"}
                     </div>
-                    <div className={debugInfo.checks.hasWinningPosition ? "text-green-500" : "text-red-500"}>
-                      ✓ Has Winning Position: {debugInfo.checks.hasWinningPosition ? "PASS" : "FAIL"}
+                    <div className={debugInfo.checks?.hasWinningPosition ? "text-green-500" : "text-red-500"}>
+                      ✓ Has Winning Position: {debugInfo.checks?.hasWinningPosition ? "PASS" : "FAIL"}
                     </div>
-                    <div className={!debugInfo.checks.alreadyClaimed ? "text-green-500" : "text-red-500"}>
-                      ✓ Not Claimed Yet: {!debugInfo.checks.alreadyClaimed ? "PASS" : "FAIL (Already claimed!)"}
+                    <div className={!debugInfo.checks?.alreadyClaimed ? "text-green-500" : "text-red-500"}>
+                      ✓ Not Claimed Yet: {!debugInfo.checks?.alreadyClaimed ? "PASS" : "FAIL (Already claimed!)"}
                     </div>
-                    <div className={debugInfo.checks.vaultHasEnoughFunds ? "text-green-500" : "text-red-500"}>
-                      ✓ Vault Has Funds: {debugInfo.checks.vaultHasEnoughFunds ? "PASS" : "FAIL (Insufficient balance!)"}
+                    <div className={debugInfo.checks?.vaultHasEnoughFunds ? "text-green-500" : "text-red-500"}>
+                      ✓ Vault Has Funds: {debugInfo.checks?.vaultHasEnoughFunds ? "PASS" : "FAIL (Insufficient balance!)"}
                     </div>
                   </div>
                 </div>
@@ -259,15 +300,15 @@ export default function DebugPage() {
                 <div className="border-t border-matrix/30 pt-4">
                   <h3 className="text-matrix font-bold mb-2">Summary</h3>
                   {debugInfo.checks.alreadyClaimed ? (
-                    <div className="text-yellow-500">⚠️ Winnings have already been claimed!</div>
+                    <div className="text-yellow-500">Winnings have already been claimed!</div>
                   ) : !debugInfo.checks.marketResolved ? (
-                    <div className="text-yellow-500">⚠️ Market is not resolved yet.</div>
+                    <div className="text-yellow-500">Market is not resolved yet.</div>
                   ) : !debugInfo.checks.hasWinningPosition ? (
-                    <div className="text-yellow-500">⚠️ User did not bet on the winning side.</div>
+                    <div className="text-yellow-500">User did not bet on the winning side.</div>
                   ) : !debugInfo.checks.vaultHasEnoughFunds ? (
-                    <div className="text-red-500">❌ Vault doesn't have enough funds! This is a critical error.</div>
+                    <div className="text-red-500">Vault doesn&apos;t have enough funds! This is a critical error.</div>
                   ) : (
-                    <div className="text-green-500">✅ User should be able to claim {debugInfo.positionData?.calculatedWinnings?.toFixed(4)} SOL</div>
+                    <div className="text-green-500">User should be able to claim {debugInfo.positionData?.calculatedWinnings?.toFixed(4)} SOL</div>
                   )}
                 </div>
               </div>

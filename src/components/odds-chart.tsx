@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useEffect } from "react";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 
 interface OddsChartProps {
   yesPercent: number;
@@ -54,7 +54,6 @@ export default function OddsChart({
       
       // Drift towards actual current values as we approach the end
       const targetYes = yesPercent;
-      const targetNo = noPercent;
       
       const drift = Math.pow(progress, 0.7); // Ease in
       yesValue = yesValue + (targetYes - yesValue) * drift * 0.08;
@@ -86,7 +85,7 @@ export default function OddsChart({
   }, [yesPercent, noPercent, marketCreatedAt]);
 
   // Custom tooltip
-  const CustomTooltip = ({ active, payload }: any) => {
+  const CustomTooltip = ({ active, payload }: { active?: boolean; payload?: Array<{ value: number; payload: { fullTime: string } }> }) => {
     if (active && payload && payload.length) {
       return (
         <div className="bg-gradient-to-b from-[#1a1a1a] to-[#0d0d0d] border border-gray-700 p-4 rounded-lg shadow-2xl backdrop-blur-sm">

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useWallet, useConnection } from "@solana/wallet-adapter-react";
-import { PublicKey, Transaction, SystemProgram, LAMPORTS_PER_SOL } from "@solana/web3.js";
+import { PublicKey, Transaction, SystemProgram } from "@solana/web3.js";
 import { useRouter } from "next/navigation";
 import { SEER_PROGRAM_ID } from "@/lib/seer-program";
 
@@ -74,8 +74,15 @@ export default function CreateMarketForm() {
     }
     
     const futureDate = new Date(Date.now() + hours * 60 * 60 * 1000);
-    setEndDate(futureDate.toISOString().split("T")[0]);
-    setEndTime(futureDate.toTimeString().slice(0, 5));
+    // Use local date components to avoid UTC/local time mismatch
+    const year = futureDate.getFullYear();
+    const month = String(futureDate.getMonth() + 1).padStart(2, '0');
+    const day = String(futureDate.getDate()).padStart(2, '0');
+    const hour = String(futureDate.getHours()).padStart(2, '0');
+    const minute = String(futureDate.getMinutes()).padStart(2, '0');
+    
+    setEndDate(`${year}-${month}-${day}`);
+    setEndTime(`${hour}:${minute}`);
     setSelectedPreset(label);
   };
 
@@ -388,7 +395,7 @@ export default function CreateMarketForm() {
         {/* Error */}
         {error && (
           <div className="border border-cyber bg-cyber/10 p-4 text-cyber font-mono text-sm">
-            ⚠️ {error}
+            {error}
           </div>
         )}
 

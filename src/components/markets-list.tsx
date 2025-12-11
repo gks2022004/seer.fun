@@ -36,7 +36,7 @@ export default function MarketsList() {
   if (error) {
     return (
       <div className="text-center py-12">
-        <div className="text-cyber text-6xl mb-4">⚠️</div>
+        <div className="text-cyber text-6xl mb-4"></div>
         <h2 className="font-vt323 text-xl text-cyber mb-2">ERROR LOADING MARKETS</h2>
         <p className="text-gray-400 font-mono text-sm mb-4">{error}</p>
         <button 

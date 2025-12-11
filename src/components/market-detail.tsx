@@ -517,7 +517,7 @@ export default function MarketDetail({ marketId }: MarketDetailProps) {
             
             {aiError && (
               <div className="text-cyber font-mono text-sm p-2 bg-cyber/10 border border-cyber/30">
-                ⚠️ {aiError}
+                {aiError}
               </div>
             )}
             

@@ -312,7 +312,7 @@ export default function UserPositions() {
 
       {error && (
         <div className="border border-cyber bg-cyber/10 p-4 text-cyber font-mono text-sm mb-4">
-          ⚠️ {error}
+          {error}
         </div>
       )}
 
