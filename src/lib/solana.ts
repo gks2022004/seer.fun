@@ -371,22 +371,55 @@ export async function createAutoResolvePriceMarketTransaction(
 ): Promise<Transaction> {
   const transaction = new Transaction();
 
-  // For devnet, Pyth price accounts are derived from the feed ID
-  // The Pyth program on devnet is: gSbePebfvPy7tRqimPoVecS2UsBvYv46ynrzWocc92s
-  const pythProgramId = new PublicKey("gSbePebfvPy7tRqimPoVecS2UsBvYv46ynrzWocc92s");
+  // Add compute budget for Pyth oracle operations
+  const computeBudget = ComputeBudgetProgram.setComputeUnitLimit({
+    units: 400_000,
+  });
+  transaction.add(computeBudget);
+
+  // Add priority fee
+  const priorityFee = ComputeBudgetProgram.setComputeUnitPrice({
+    microLamports: 100_000,
+  });
+  transaction.add(priorityFee);
+
+  // Pyth Solana Receiver program on devnet
+  // Note: This is the new Pyth Pull Oracle program
+  const pythSolanaReceiverProgramId = new PublicKey("rec5EKMGg6MxZYaMdyBfgwp4d5rB9T1VQH5pJv5LtFJ");
   
-  // Derive Pyth price account from feed ID
-  // Feed ID is a hex string, convert to buffer
+  // Derive price update account from feed ID
   const feedIdBuffer = Buffer.from(pythFeedId.replace("0x", ""), "hex");
-  const [pythPriceAccount] = PublicKey.findProgramAddressSync(
-    [feedIdBuffer],
-    pythProgramId
+  
+  // The price update account PDA
+  const [priceUpdateAccount] = PublicKey.findProgramAddressSync(
+    [Buffer.from("price_update"), feedIdBuffer],
+    pythSolanaReceiverProgramId
   );
+
+  console.log("Pyth Feed ID:", pythFeedId);
+  console.log("Price Update Account:", priceUpdateAccount.toBase58());
+
+  // Check if price update account exists
+  try {
+    const accountInfo = await connection.getAccountInfo(priceUpdateAccount);
+    if (!accountInfo) {
+      throw new Error(
+        `Pyth price feed not found on devnet. ` +
+        `Price feeds need to be posted to the Pyth Receiver program first. ` +
+        `For devnet testing, you may need to use a price feed that has been recently updated, ` +
+        `or use the Pyth Hermes API to push price updates.`
+      );
+    }
+    console.log("Price update account exists, owner:", accountInfo.owner.toBase58());
+  } catch (error) {
+    console.error("Error checking price update account:", error);
+    throw error;
+  }
 
   const instruction = createAutoResolvePriceMarketInstruction(
     caller,
     market,
-    pythPriceAccount
+    priceUpdateAccount
   );
   transaction.add(instruction);
 

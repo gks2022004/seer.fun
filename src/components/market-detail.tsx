@@ -467,8 +467,19 @@ export default function MarketDetail({ marketId }: MarketDetailProps) {
 
           {/* Transaction Status */}
           {txError && (
-            <div className="border border-cyber bg-cyber/10 p-3 text-cyber font-mono text-sm mt-4">
-               {txError}
+            <div className="border border-cyber bg-cyber/10 p-3 mt-4">
+              <div className="text-cyber font-mono text-sm mb-2">{txError}</div>
+              {txError.includes("price feed not found") && (
+                <div className="text-gray-400 font-mono text-xs mt-2 p-2 bg-void/50 border border-gray-700">
+                  <div className="mb-1">💡 <strong>Pyth Price Feeds on Devnet:</strong></div>
+                  <div className="ml-4 space-y-1">
+                    <div>• Pyth uses a &quot;pull&quot; model - prices must be posted on-chain before use</div>
+                    <div>• For devnet testing, price feeds may not be regularly updated</div>
+                    <div>• Consider using Event Markets for devnet testing</div>
+                    <div>• Price Markets work best on mainnet with active Pyth feeds</div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
           {txSuccess && (

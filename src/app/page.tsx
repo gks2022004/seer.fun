@@ -220,20 +220,17 @@ export default function Home() {
           <div className="font-mono text-xs text-gray-400">
             <span className="text-matrix">&gt;</span> Built on Solana | Powered by Blinks
           </div>
-          <div className="flex gap-4 font-mono text-xs">
-            <a href="#" className="text-gray-400 hover:text-matrix transition-colors">
-              [DOCS]
-            </a>
-            <a href="#" className="text-gray-400 hover:text-matrix transition-colors">
-              [GITHUB]
-            </a>
-            <a href="#" className="text-gray-400 hover:text-cyber transition-colors">
-              [TWITTER]
-            </a>
-          </div>
-        </div>
-        <div className="mt-4 font-vt323 text-center text-gray-400 text-sm">
-          ═══════════════════════════════════════════════════════
+        {/* <div className="flex gap-4 font-mono text-xs">
+              <a href="#" className="text-gray-400 hover:text-matrix transition-colors">
+                [DOCS]
+              </a>
+              <a href="#" className="text-gray-400 hover:text-matrix transition-colors">
+                [GITHUB]
+              </a>
+              <a href="#" className="text-gray-400 hover:text-cyber transition-colors">
+                [TWITTER]
+              </a>
+              </div> */}
         </div>
       </footer>
     </main>

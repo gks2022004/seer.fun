@@ -44,6 +44,14 @@ export default function CreateMarketForm() {
   const { publicKey, sendTransaction } = useWallet();
   const { connection } = useConnection();
   
+  // Check if we're on devnet - more robust detection
+  const rpcUrl = connection.rpcEndpoint.toLowerCase();
+  const isDevnet = rpcUrl.includes("devnet") || rpcUrl.includes("127.0.0.1") || rpcUrl.includes("localhost");
+  
+  // For debugging - remove this after confirming
+  console.log("RPC Endpoint:", connection.rpcEndpoint);
+  console.log("Is Devnet:", isDevnet);
+  
   const [question, setQuestion] = useState("");
   const [endDate, setEndDate] = useState("");
   const [endTime, setEndTime] = useState("");
@@ -358,17 +366,34 @@ export default function CreateMarketForm() {
             <button
               type="button"
               onClick={() => setMarketType("price")}
-              disabled={loading}
+              disabled={loading || isDevnet}
               className={`p-4 border-2 transition-all text-left ${
                 marketType === "price"
                   ? "border-matrix bg-matrix/20"
+                  : isDevnet
+                  ? "border-gray-700 opacity-50 cursor-not-allowed"
                   : "border-gray-700 hover:border-gray-500"
               }`}
             >
-              <div className="font-mono text-sm text-white mb-1">PRICE MARKET</div>
-              <div className="text-xs text-gray-400">Auto-resolve with Pyth Oracle</div>
+              <div className="font-mono text-sm text-white mb-1">
+                PRICE MARKET
+                {isDevnet && <span className="text-yellow-500 ml-2">(Mainnet Only)</span>}
+              </div>
+              <div className="text-xs text-gray-400">
+                {isDevnet 
+                  ? "Requires Pyth oracles (not available on devnet)"
+                  : "Auto-resolve with Pyth Oracle"
+                }
+              </div>
             </button>
           </div>
+          {isDevnet && (
+            <div className="bg-yellow-500/10 border border-yellow-500/30 p-3 rounded">
+              <p className="text-yellow-400 font-mono text-xs">
+                Price markets require active Pyth price feeds. These are only available on mainnet. Use Event Markets for devnet testing.
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Pyth Feed Selection (Price Markets Only) */}
