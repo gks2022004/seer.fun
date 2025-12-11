@@ -1,31 +1,37 @@
 use anchor_lang::prelude::*;
 use anchor_lang::system_program;
-use pyth_solana_receiver_sdk::price_update::{get_feed_id_from_hex, PriceUpdateV2};
 
-declare_id!("5d9gPjzVJsPaVhw1LvSj8RBr2MXSca12mTQoh63CmN74");
+declare_id!("5XrAkDuDwvsqVxMkVETukYdAjuACH3poCAcP4hZJoKSQ");
+
+// Market creation fee: 0.01 SOL
+pub const MARKET_CREATION_FEE: u64 = 10_000_000; // 0.01 SOL in lamports
+
+// Treasury address to receive fees (change this to your wallet)
+pub const TREASURY: &str = "BfxvKDgh3nWpM5JX2NF7M7MJLirJkuWHMM3n5JohStx";
 
 #[program]
 pub mod seer_program {
     use super::*;
 
-    /// Initialize a new prediction market
+    /// Initialize a new prediction market (charges 0.01 SOL fee)
     pub fn initialize_market(
         ctx: Context<InitializeMarket>,
         _market_id: [u8; 32], // Hash of the question, used for PDA
         question: String,
         end_time: i64,
-        market_type: MarketType,
-        pyth_feed_id: Option<String>, // Hex string of Pyth feed ID
-        target_price: Option<i64>, // Target price in USD cents (e.g., 150000 for $1500.00)
     ) -> Result<()> {
         require!(question.len() <= 200, SeerError::QuestionTooLong);
         require!(end_time > Clock::get()?.unix_timestamp, SeerError::InvalidEndTime);
 
-        // Validate price market parameters
-        if market_type == MarketType::Price {
-            require!(pyth_feed_id.is_some(), SeerError::MissingPythFeed);
-            require!(target_price.is_some(), SeerError::MissingTargetPrice);
-        }
+        // Charge market creation fee
+        let cpi_context = CpiContext::new(
+            ctx.accounts.system_program.to_account_info(),
+            system_program::Transfer {
+                from: ctx.accounts.creator.to_account_info(),
+                to: ctx.accounts.treasury.to_account_info(),
+            },
+        );
+        system_program::transfer(cpi_context, MARKET_CREATION_FEE)?;
 
         let market = &mut ctx.accounts.market;
         market.creator = ctx.accounts.creator.key();
@@ -37,19 +43,11 @@ pub mod seer_program {
         market.end_time = end_time;
         market.bump = ctx.bumps.market;
         market.total_bettors = 0;
-        market.market_type = market_type;
-        
-        // Set Pyth params if price market
-        market.pyth_feed_id = pyth_feed_id.map(|hex| {
-            get_feed_id_from_hex(&hex)
-                .expect("Invalid Pyth feed ID")
-        });
-        market.target_price = target_price;
 
         msg!("Market created: {}", market.key());
         msg!("Creator: {}", market.creator);
         msg!("End time: {}", market.end_time);
-        msg!("Market type: {:?}", market_type);
+        msg!("Creation fee: {} lamports", MARKET_CREATION_FEE);
 
         Ok(())
     }
@@ -112,6 +110,7 @@ pub mod seer_program {
     }
 
     /// Resolve the market (only creator can resolve)
+    /// Creator can use AI suggestion from Perplexity to determine outcome
     pub fn resolve_market(
         ctx: Context<ResolveMarket>,
         outcome: bool, // true = YES wins, false = NO wins
@@ -122,7 +121,6 @@ pub mod seer_program {
             Clock::get()?.unix_timestamp >= market.end_time,
             SeerError::MarketNotEnded
         );
-        require!(market.market_type == MarketType::Event, SeerError::CannotResolveAutomatically);
 
         let market = &mut ctx.accounts.market;
         market.resolved = true;
@@ -133,48 +131,6 @@ pub mod seer_program {
             outcome,
             total_pool: market.yes_amount.checked_add(market.no_amount).unwrap(),
         });
-
-        Ok(())
-    }
-
-    /// Auto-resolve price market using Pyth oracle (anyone can call after end_time)
-    pub fn resolve_price_market(
-        ctx: Context<ResolvePriceMarket>,
-    ) -> Result<()> {
-        let market = &ctx.accounts.market;
-        require!(!market.resolved, SeerError::MarketAlreadyResolved);
-        require!(
-            Clock::get()?.unix_timestamp >= market.end_time,
-            SeerError::MarketNotEnded
-        );
-        require!(market.market_type == MarketType::Price, SeerError::NotPriceMarket);
-        
-        let feed_id = market.pyth_feed_id.ok_or(SeerError::MissingPythFeed)?;
-        let target_price = market.target_price.ok_or(SeerError::MissingTargetPrice)?;
-
-        // Get price from Pyth oracle
-        let price_update = &mut ctx.accounts.price_update;
-        let price = price_update.get_price_no_older_than(
-            &Clock::get()?,
-            60, // Max 60 seconds old
-            &feed_id,
-        )?;
-
-        // Compare price with target (price.price is in cents/dollars depending on feed)
-        let outcome = price.price >= target_price;
-
-        let market = &mut ctx.accounts.market;
-        market.resolved = true;
-        market.outcome = outcome;
-
-        emit!(MarketResolved {
-            market: market.key(),
-            outcome,
-            total_pool: market.yes_amount.checked_add(market.no_amount).unwrap(),
-        });
-
-        msg!("Price market resolved: price={}, target={}, outcome={}", 
-            price.price, target_price, outcome);
 
         Ok(())
     }
@@ -211,6 +167,13 @@ pub mod seer_program {
             .checked_div(winning_pool as u128)
             .unwrap() as u64;
 
+        // Get vault balance and determine actual transfer amount
+        let vault_balance = ctx.accounts.market_vault.lamports();
+        
+        // Transfer all available funds from vault (handles dust and rent issues)
+        // If vault has less than calculated winnings due to rounding, transfer what's available
+        let actual_transfer = std::cmp::min(winnings, vault_balance);
+        
         // Transfer winnings from vault to user
         let market_key = market.key();
         let seeds = &[
@@ -220,15 +183,20 @@ pub mod seer_program {
         ];
         let signer = &[&seeds[..]];
 
-        let cpi_context = CpiContext::new_with_signer(
-            ctx.accounts.system_program.to_account_info(),
-            system_program::Transfer {
-                from: ctx.accounts.market_vault.to_account_info(),
-                to: ctx.accounts.bettor.to_account_info(),
-            },
-            signer,
-        );
-        system_program::transfer(cpi_context, winnings)?;
+        // Use direct lamport manipulation to avoid rent issues
+        // This allows us to drain the PDA completely
+        **ctx.accounts.market_vault.try_borrow_mut_lamports()? = ctx
+            .accounts
+            .market_vault
+            .lamports()
+            .checked_sub(actual_transfer)
+            .unwrap();
+        **ctx.accounts.bettor.try_borrow_mut_lamports()? = ctx
+            .accounts
+            .bettor
+            .lamports()
+            .checked_add(actual_transfer)
+            .unwrap();
 
         // Mark as claimed
         let position = &mut ctx.accounts.user_position;
@@ -237,7 +205,7 @@ pub mod seer_program {
         emit!(WinningsClaimed {
             market: market.key(),
             bettor: ctx.accounts.bettor.key(),
-            amount: winnings,
+            amount: actual_transfer,
         });
 
         Ok(())
@@ -269,6 +237,13 @@ pub struct InitializeMarket<'info> {
         bump
     )]
     pub market_vault: AccountInfo<'info>,
+
+    /// CHECK: Treasury account to receive market creation fees
+    #[account(
+        mut,
+        address = TREASURY.parse::<Pubkey>().unwrap() @ SeerError::InvalidTreasury
+    )]
+    pub treasury: AccountInfo<'info>,
 
     pub system_program: Program<'info, System>,
 }
@@ -313,15 +288,6 @@ pub struct ResolveMarket<'info> {
 }
 
 #[derive(Accounts)]
-pub struct ResolvePriceMarket<'info> {
-    #[account(mut)]
-    pub market: Account<'info, Market>,
-
-    /// Pyth price update account
-    pub price_update: Account<'info, PriceUpdateV2>,
-}
-
-#[derive(Accounts)]
 pub struct ClaimWinnings<'info> {
     #[account(mut)]
     pub bettor: Signer<'info>,
@@ -354,12 +320,6 @@ pub struct ClaimWinnings<'info> {
 // STATE
 // ============================================================================
 
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Eq, Debug)]
-pub enum MarketType {
-    Event,  // Manual resolution (current system)
-    Price,  // Auto-resolve with Pyth oracle
-}
-
 #[account]
 pub struct Market {
     pub creator: Pubkey,        // 32 bytes - Market creator
@@ -371,9 +331,6 @@ pub struct Market {
     pub end_time: i64,          // 8 bytes - Unix timestamp when betting ends
     pub bump: u8,               // 1 byte - PDA bump
     pub total_bettors: u32,     // 4 bytes - Number of unique bettors
-    pub market_type: MarketType, // 1 byte - Event or Price market
-    pub pyth_feed_id: Option<[u8; 32]>, // 1 + 32 bytes - Pyth price feed ID (if price market)
-    pub target_price: Option<i64>, // 1 + 8 bytes - Target price in USD (if price market)
 }
 
 impl Market {
@@ -386,10 +343,7 @@ impl Market {
         + 1                     // outcome
         + 8                     // end_time
         + 1                     // bump
-        + 4                     // total_bettors
-        + 1                     // market_type
-        + 1 + 32                // pyth_feed_id (Option)
-        + 1 + 8;                // target_price (Option)
+        + 4;                    // total_bettors
 }
 
 #[account]
@@ -487,15 +441,6 @@ pub enum SeerError {
     #[msg("Unauthorized action")]
     Unauthorized,
 
-    #[msg("Pyth feed ID is required for price markets")]
-    MissingPythFeed,
-
-    #[msg("Target price is required for price markets")]
-    MissingTargetPrice,
-
-    #[msg("This market type cannot be resolved automatically")]
-    CannotResolveAutomatically,
-
-    #[msg("This is not a price market")]
-    NotPriceMarket,
+    #[msg("Invalid treasury address")]
+    InvalidTreasury,
 }

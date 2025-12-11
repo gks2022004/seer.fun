@@ -151,7 +151,17 @@ export default function UserPositions() {
       // claim_winnings discriminator: [161, 215, 24, 59, 14, 236, 242, 221]
       const discriminator = Buffer.from([161, 215, 24, 59, 14, 236, 242, 221]);
 
-      const transaction = new Transaction().add({
+      const { ComputeBudgetProgram } = await import("@solana/web3.js");
+      
+      const transaction = new Transaction();
+      
+      // Add compute budget for priority
+      transaction.add(
+        ComputeBudgetProgram.setComputeUnitLimit({ units: 200000 }),
+        ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 50000 })
+      );
+
+      transaction.add({
         keys: [
           { pubkey: publicKey, isSigner: true, isWritable: true },
           { pubkey: marketPubkey, isSigner: false, isWritable: false },
@@ -163,8 +173,21 @@ export default function UserPositions() {
         data: discriminator,
       });
 
-      const signature = await sendTransaction(transaction, walletConnection);
-      await walletConnection.confirmTransaction(signature, "confirmed");
+      const { blockhash, lastValidBlockHeight } = await walletConnection.getLatestBlockhash("confirmed");
+      transaction.recentBlockhash = blockhash;
+      transaction.lastValidBlockHeight = lastValidBlockHeight;
+      transaction.feePayer = publicKey;
+
+      const signature = await sendTransaction(transaction, walletConnection, {
+        skipPreflight: true,
+        preflightCommitment: "confirmed",
+      });
+      
+      await walletConnection.confirmTransaction({
+        signature,
+        blockhash,
+        lastValidBlockHeight,
+      }, "confirmed");
 
       // Refresh positions
       fetchPositions();
@@ -198,7 +221,7 @@ export default function UserPositions() {
   if (!publicKey) {
     return (
       <div className="text-center py-12">
-        <div className="text-gray-500 text-6xl mb-4">🔐</div>
+        <div className="text-gray-500 text-6xl mb-4"></div>
         <h2 className="font-vt323 text-xl text-gray-400 mb-2">CONNECT WALLET</h2>
         <p className="text-gray-500 font-mono text-sm">
           Connect your wallet to view your positions
@@ -295,7 +318,7 @@ export default function UserPositions() {
 
       {positions.length === 0 ? (
         <div className="text-center py-12 border border-dashed border-gray-700">
-          <div className="text-gray-500 text-6xl mb-4">🎯</div>
+          <div className="text-gray-500 text-6xl mb-4"></div>
           <h2 className="font-vt323 text-xl text-gray-400 mb-2">NO POSITIONS YET</h2>
           <p className="text-gray-500 font-mono text-sm mb-4">
             You haven&apos;t placed any bets yet

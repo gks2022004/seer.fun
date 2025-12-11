@@ -75,7 +75,7 @@ export default function MarketsList() {
 
       {markets.length === 0 ? (
         <div className="text-center py-12 border border-dashed border-gray-700">
-          <div className="text-gray-500 text-6xl mb-4">📊</div>
+          <div className="text-gray-500 text-6xl mb-4"></div>
           <h2 className="font-vt323 text-xl text-gray-400 mb-2">NO MARKETS YET</h2>
           <p className="text-gray-500 font-mono text-sm mb-4">
             Be the first to create a prediction market

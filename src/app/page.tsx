@@ -132,6 +132,10 @@ export default function Home() {
           <div className="space-y-3 font-mono text-sm">
             <div className="flex items-center gap-3">
               <span className="text-matrix">[✓]</span>
+              <span className="text-gray-400">AI-powered market resolution</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="text-matrix">[✓]</span>
               <span className="text-gray-400">Bet directly from Twitter/X via Blinks</span>
             </div>
             <div className="flex items-center gap-3">
@@ -198,19 +202,19 @@ export default function Home() {
                 BET NO ↓
               </button>
             </div>
-
-            {/* Blink Preview */}
-            <div className="mt-6 p-3 border border-dashed border-gray-400 rounded">
-              <div className="flex items-center gap-2 mb-2">
-                <span className="text-gray-400 font-mono text-xs">BLINK PREVIEW</span>
-                <span className="w-2 h-2 bg-matrix rounded-full animate-pulse"></span>
-              </div>
-              <div className="bg-void p-2 rounded font-mono text-xs">
-                <span className="text-gray-400">https://seer.fun/api/actions/bet/</span>
-                <span className="text-matrix">0x7f3...</span>
-              </div>
-            </div>
           </div>
+        </div>
+      </div>
+
+      {/* Blink Preview Section */}
+      <div className="mt-12 border border-dashed border-gray-600 p-6">
+        <div className="flex items-center gap-2 mb-4">
+          <span className="font-mono text-gray-300">BLINK PREVIEW</span>
+          <span className="w-2 h-2 bg-matrix rounded-full animate-pulse"></span>
+        </div>
+        <div className="font-mono text-sm">
+          <span className="text-gray-400">https://seer.fun/api/actions/bet/</span>
+          <span className="text-matrix">0x{marketId}...</span>
         </div>
       </div>
 

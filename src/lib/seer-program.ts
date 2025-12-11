@@ -1,13 +1,13 @@
-// Seer Program IDL - Generated from Anchor build
-export const SEER_PROGRAM_ID = "5d9gPjzVJsPaVhw1LvSj8RBr2MXSca12mTQoh63CmN74";
+// Seer Program IDL - Simplified (AI-Resolved Markets)
+export const SEER_PROGRAM_ID = "5XrAkDuDwvsqVxMkVETukYdAjuACH3poCAcP4hZJoKSQ";
 
 export const SEER_IDL = {
-  address: "5d9gPjzVJsPaVhw1LvSj8RBr2MXSca12mTQoh63CmN74",
+  address: "BwGjxxo2jjAE1aACq4L74L2WzaLjFrxuvvbTMxHyrKbS",
   metadata: {
     name: "seer_program",
     version: "0.1.0",
     spec: "0.1.0",
-    description: "Seer.fun - Prediction Markets on Solana",
+    description: "Seer.fun - AI-Powered Prediction Markets on Solana",
   },
   instructions: [
     {
@@ -168,18 +168,4 @@ export interface MarketAccount {
   endTime: bigint;
   bump: number;
   totalBettors: number;
-  marketType: { event: Record<string, never> } | { price: Record<string, never> };
-  pythFeedId: string | null;
-  targetPrice: bigint | null;
-}
-
-export type MarketType = "event" | "price";
-
-// Helper to check market type
-export function isEventMarket(market: MarketAccount): boolean {
-  return "event" in market.marketType;
-}
-
-export function isPriceMarket(market: MarketAccount): boolean {
-  return "price" in market.marketType;
 }

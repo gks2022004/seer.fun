@@ -1,25 +1,26 @@
 # Seer.fun
 
-A decentralized prediction market platform built on Solana with native Twitter/X integration via Solana Blinks.
+A decentralized prediction market platform built on Solana with AI-powered resolution and native Twitter/X integration via Solana Blinks.
 
 ## Overview
 
-Seer.fun enables users to create and participate in prediction markets directly from Twitter. Users can bet on real-world events using SOL, with outcomes determined either manually by market creators or automatically via Pyth price oracles.
+Seer.fun enables users to create and participate in prediction markets directly from Twitter. Users can bet on real-world events using SOL, with outcomes intelligently resolved using AI-powered analysis from Perplexity, then confirmed by market creators.
 
 ## Features
 
+- **AI-Powered Resolution**: Markets are resolved using Perplexity AI that analyzes real-world data and provides resolution suggestions with confidence scores
 - **Prediction Markets**: Create yes/no markets on any topic with customizable end times
 - **Solana Blinks**: Place bets directly from Twitter/X without leaving the app
-- **Pyth Oracle Integration**: Price-based markets auto-resolve using real-time oracle data
 - **On-chain Settlement**: All bets and payouts are handled by Solana smart contracts
 - **Shareable Markets**: Generate Blink URLs to share markets on social media
+- **Professional Charts**: Real-time odds visualization with interactive charting
 
 ## Tech Stack
 
-- **Frontend**: Next.js 14, React, TypeScript, Tailwind CSS
+- **Frontend**: Next.js 14, React, TypeScript, Tailwind CSS, Recharts
 - **Blockchain**: Solana, Anchor Framework
-- **Oracles**: Pyth Network (for price markets)
-- **Wallet**: Solana Wallet Adapter (Phantom, Solflare)
+- **AI Resolution**: Perplexity API (Sonar model with real-time web search)
+- **Wallet**: Solana Wallet Adapter (Phantom, Solflare, etc.)
 - **Actions**: Solana Actions / Blinks
 
 ## Project Structure
@@ -28,12 +29,16 @@ Seer.fun enables users to create and participate in prediction markets directly 
 seer.fun/
 ├── src/
 │   ├── app/                    # Next.js app router pages
-│   │   ├── api/actions/        # Blink API endpoints
+│   │   ├── api/
+│   │   │   ├── actions/        # Blink API endpoints
+│   │   │   └── ai/suggest/     # AI resolution API
 │   │   ├── dashboard/          # Market dashboard pages
 │   │   └── market/             # Market detail pages
 │   ├── components/             # React components
 │   ├── hooks/                  # Custom React hooks
 │   └── lib/                    # Utility functions and Solana helpers
+│       ├── perplexity.ts       # AI resolution service
+│       └── seer-program.ts     # Program IDL and types
 ├── anchor/
 │   ├── programs/seer_program/  # Solana smart contract (Rust)
 │   └── tests/                  # Contract tests
@@ -45,7 +50,7 @@ seer.fun/
 The Seer program is deployed on Solana Devnet:
 
 ```
-Program ID: 5d9gPjzVJsPaVhw1LvSj8RBr2MXSca12mTQoh63CmN74
+Program ID: BwGjxxo2jjAE1aACq4L74L2WzaLjFrxuvvbTMxHyrKbS
 ```
 
 ### Instructions
@@ -54,14 +59,18 @@ Program ID: 5d9gPjzVJsPaVhw1LvSj8RBr2MXSca12mTQoh63CmN74
 |-------------|-------------|
 | `initialize_market` | Create a new prediction market |
 | `place_bet` | Place a YES or NO bet on a market |
-| `resolve_market` | Manually resolve a market (creator only) |
-| `resolve_price_market` | Auto-resolve using Pyth oracle data |
+| `resolve_market` | Resolve a market (creator only, can use AI suggestion) |
 | `claim_winnings` | Claim winnings from a resolved market |
 
-### Market Types
+### Resolution Flow
 
-1. **Event Markets**: Resolved manually by the market creator
-2. **Price Markets**: Automatically resolved based on Pyth price feeds
+All markets use AI-assisted resolution:
+
+1. Market creator clicks "Get AI Suggestion"
+2. Perplexity AI analyzes real-world data via web search
+3. AI returns suggested outcome (YES/NO) with confidence % and reasoning
+4. Creator reviews and confirms the resolution
+5. Smart contract settles and winners can claim
 
 ## Getting Started
 
@@ -91,6 +100,7 @@ cp .env.example .env.local
 
 ```bash
 NEXT_PUBLIC_SOLANA_RPC=https://api.devnet.solana.com
+PERPLEXITY_API_KEY=your_perplexity_api_key_here
 ```
 
 ### Development
@@ -130,6 +140,14 @@ GET  /api/actions/bet/[marketId]  - Get Blink metadata for a market
 POST /api/actions/bet/[marketId]  - Create bet transaction
 ```
 
+### AI Resolution
+
+```
+POST /api/ai/suggest               - Get AI resolution suggestion
+     Body: { question: string, endTime: number }
+     Returns: { suggestedOutcome: boolean, confidence: number, reasoning: string, sources: string[] }
+```
+
 ### Actions JSON
 
 ```
@@ -161,13 +179,17 @@ GET  /.well-known/actions.json    - Blink discovery manifest
 
 ### Resolving Markets
 
-**Event Markets:**
-- Only the creator can resolve after end time
-- Choose YES or NO as the winning outcome
+When a market ends, the creator can:
 
-**Price Markets:**
-- Anyone can trigger auto-resolution after end time
-- Pyth oracle determines outcome based on target price
+1. Click "Get AI Suggestion" 
+2. Review AI analysis with:
+   - Suggested outcome (YES/NO)
+   - Confidence percentage
+   - Reasoning with sources
+3. Accept AI suggestion or manually choose outcome
+4. Confirm resolution on-chain
+
+The AI uses Perplexity's real-time web search to analyze current events and provide data-backed recommendations.
 
 ### Claiming Winnings
 

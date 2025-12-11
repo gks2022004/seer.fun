@@ -104,15 +104,6 @@ Bet now on @Seer_fun 👇`;
             Share this URL on Twitter to enable direct betting via Blinks
           </p>
         </div>
-
-        {/* Preview Card */}
-        <div className="mt-4 p-3 border border-dashed border-gray-700 bg-gray-900/50">
-          <div className="text-xs font-mono text-gray-500 mb-2">PREVIEW</div>
-          <div className="text-sm font-mono text-white mb-1">{question.slice(0, 50)}{question.length > 50 ? "..." : ""}</div>
-          <div className="text-xs font-mono text-gray-400">
-            YES: {odds.yes}% | NO: {odds.no}% | Pool: {pool} SOL
-          </div>
-        </div>
       </div>
     </div>
   );

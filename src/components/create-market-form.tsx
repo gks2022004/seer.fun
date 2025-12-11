@@ -2,10 +2,13 @@
 
 import { useState } from "react";
 import { useWallet, useConnection } from "@solana/wallet-adapter-react";
-import { PublicKey, Transaction, SystemProgram } from "@solana/web3.js";
+import { PublicKey, Transaction, SystemProgram, LAMPORTS_PER_SOL } from "@solana/web3.js";
 import { useRouter } from "next/navigation";
 import { SEER_PROGRAM_ID } from "@/lib/seer-program";
-import { PYTH_FEEDS_ARRAY, type PythFeed } from "@/lib/pyth-feeds";
+
+// Treasury address to receive market creation fees
+const TREASURY_ADDRESS = "BfxvKDgh3nWpM5JX2NF7M7MJLirJkuWHMM3n5JohStx";
+const MARKET_CREATION_FEE = 0.01; // SOL
 
 // Hash function using Web Crypto API (browser-compatible)
 async function hashQuestion(question: string): Promise<Uint8Array> {
@@ -44,21 +47,10 @@ export default function CreateMarketForm() {
   const { publicKey, sendTransaction } = useWallet();
   const { connection } = useConnection();
   
-  // Check if we're on devnet - more robust detection
-  const rpcUrl = connection.rpcEndpoint.toLowerCase();
-  const isDevnet = rpcUrl.includes("devnet") || rpcUrl.includes("127.0.0.1") || rpcUrl.includes("localhost");
-  
-  // For debugging - remove this after confirming
-  console.log("RPC Endpoint:", connection.rpcEndpoint);
-  console.log("Is Devnet:", isDevnet);
-  
   const [question, setQuestion] = useState("");
   const [endDate, setEndDate] = useState("");
   const [endTime, setEndTime] = useState("");
   const [selectedPreset, setSelectedPreset] = useState<string | null>(null);
-  const [marketType, setMarketType] = useState<"event" | "price">("event");
-  const [selectedPythFeed, setSelectedPythFeed] = useState<PythFeed | null>(null);
-  const [targetPrice, setTargetPrice] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -121,18 +113,6 @@ export default function CreateMarketForm() {
       return;
     }
 
-    // Validate price market fields
-    if (marketType === "price") {
-      if (!selectedPythFeed) {
-        setError("Please select a price feed");
-        return;
-      }
-      if (!targetPrice || parseFloat(targetPrice) <= 0) {
-        setError("Please enter a valid target price");
-        return;
-      }
-    }
-
     const endTimestamp = Math.floor(new Date(`${endDate}T${endTime}`).getTime() / 1000);
     const now = Math.floor(Date.now() / 1000);
 
@@ -182,55 +162,23 @@ export default function CreateMarketForm() {
       const endTimeBuffer = Buffer.alloc(8);
       endTimeBuffer.writeBigInt64LE(BigInt(endTimestamp));
 
-      // market_type: enum (1 byte: 0 = Event, 1 = Price)
-      const marketTypeBuffer = Buffer.from([marketType === "event" ? 0 : 1]);
-
-      // pyth_feed_id: Option<String> (1 byte for Some/None + string if Some)
-      let pythFeedBuffer: Buffer;
-      if (marketType === "price" && selectedPythFeed) {
-        const feedIdBytes = Buffer.from(selectedPythFeed.id, "utf-8");
-        const feedIdLenBuffer = Buffer.alloc(4);
-        feedIdLenBuffer.writeUInt32LE(feedIdBytes.length);
-        pythFeedBuffer = Buffer.concat([
-          Buffer.from([1]), // Some
-          feedIdLenBuffer,
-          feedIdBytes,
-        ]);
-      } else {
-        pythFeedBuffer = Buffer.from([0]); // None
-      }
-
-      // target_price: Option<i64> (1 byte for Some/None + i64 if Some)
-      let targetPriceBuffer: Buffer;
-      if (marketType === "price" && targetPrice) {
-        // Convert price to cents (e.g., $100,000.00 -> 10000000)
-        const priceCents = Math.floor(parseFloat(targetPrice) * 100);
-        const priceBuffer = Buffer.alloc(8);
-        priceBuffer.writeBigInt64LE(BigInt(priceCents));
-        targetPriceBuffer = Buffer.concat([
-          Buffer.from([1]), // Some
-          priceBuffer,
-        ]);
-      } else {
-        targetPriceBuffer = Buffer.from([0]); // None
-      }
-
       const data = Buffer.concat([
         discriminator,
         marketIdBuffer,
         questionLenBuffer,
         questionBytes,
         endTimeBuffer,
-        marketTypeBuffer,
-        pythFeedBuffer,
-        targetPriceBuffer,
       ]);
 
+      // Treasury account to receive creation fees
+      const treasuryPubkey = new PublicKey(TREASURY_ADDRESS);
+      
       const transaction = new Transaction().add({
         keys: [
           { pubkey: publicKey, isSigner: true, isWritable: true },
           { pubkey: marketPda, isSigner: false, isWritable: true },
           { pubkey: vaultPda, isSigner: false, isWritable: true },
+          { pubkey: treasuryPubkey, isSigner: false, isWritable: true },
           { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
         ],
         programId,
@@ -246,7 +194,9 @@ export default function CreateMarketForm() {
       console.log("Program ID:", programId.toBase58());
       console.log("Market PDA:", marketPda.toBase58());
       console.log("Vault PDA:", vaultPda.toBase58());
+      console.log("Treasury:", treasuryPubkey.toBase58());
       console.log("Creator:", publicKey.toBase58());
+      console.log("Creation fee:", MARKET_CREATION_FEE, "SOL");
 
       // Simulate transaction first to catch errors
       try {
@@ -340,117 +290,17 @@ export default function CreateMarketForm() {
           </p>
         </div>
 
-        {/* Market Type Selection */}
-        <div className="space-y-2">
-          <label className="block font-mono text-sm text-gray-400">
-            MARKET TYPE
-          </label>
-          <div className="grid grid-cols-2 gap-4">
-            <button
-              type="button"
-              onClick={() => {
-                setMarketType("event");
-                setSelectedPythFeed(null);
-                setTargetPrice("");
-              }}
-              disabled={loading}
-              className={`p-4 border-2 transition-all text-left ${
-                marketType === "event"
-                  ? "border-matrix bg-matrix/20"
-                  : "border-gray-700 hover:border-gray-500"
-              }`}
-            >
-              <div className="font-mono text-sm text-white mb-1">EVENT MARKET</div>
-              <div className="text-xs text-gray-400">Manual resolution by creator</div>
-            </button>
-            <button
-              type="button"
-              onClick={() => setMarketType("price")}
-              disabled={loading || isDevnet}
-              className={`p-4 border-2 transition-all text-left ${
-                marketType === "price"
-                  ? "border-matrix bg-matrix/20"
-                  : isDevnet
-                  ? "border-gray-700 opacity-50 cursor-not-allowed"
-                  : "border-gray-700 hover:border-gray-500"
-              }`}
-            >
-              <div className="font-mono text-sm text-white mb-1">
-                PRICE MARKET
-                {isDevnet && <span className="text-yellow-500 ml-2">(Mainnet Only)</span>}
-              </div>
-              <div className="text-xs text-gray-400">
-                {isDevnet 
-                  ? "Requires Pyth oracles (not available on devnet)"
-                  : "Auto-resolve with Pyth Oracle"
-                }
-              </div>
-            </button>
+        {/* AI Resolution Info */}
+        <div className="border border-matrix/30 bg-matrix/5 p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-xl"></span>
+            <span className="font-mono text-sm text-matrix">AI-POWERED RESOLUTION</span>
           </div>
-          {isDevnet && (
-            <div className="bg-yellow-500/10 border border-yellow-500/30 p-3 rounded">
-              <p className="text-yellow-400 font-mono text-xs">
-                Price markets require active Pyth price feeds. These are only available on mainnet. Use Event Markets for devnet testing.
-              </p>
-            </div>
-          )}
+          <p className="text-gray-400 text-xs font-mono">
+            After your market ends, our AI agent will analyze real-world data to suggest the outcome. 
+            You confirm the resolution to finalize it.
+          </p>
         </div>
-
-        {/* Pyth Feed Selection (Price Markets Only) */}
-        {marketType === "price" && (
-          <>
-            <div className="space-y-2">
-              <label className="block font-mono text-sm text-gray-400">
-                PRICE FEED
-              </label>
-              <select
-                value={selectedPythFeed?.id || ""}
-                onChange={(e) => {
-                  const feed = PYTH_FEEDS_ARRAY.find(f => f.id === e.target.value);
-                  setSelectedPythFeed(feed || null);
-                }}
-                className="w-full bg-void border-2 border-gray-700 focus:border-matrix text-white font-mono p-3 transition-colors outline-none"
-                disabled={loading}
-              >
-                <option value="">Select a price feed...</option>
-                {PYTH_FEEDS_ARRAY.map((feed) => (
-                  <option key={feed.id} value={feed.id}>
-                    {feed.name} - {feed.description}
-                  </option>
-                ))}
-              </select>
-              {selectedPythFeed && (
-                <p className="text-gray-500 text-xs font-mono">
-                  Feed ID: {selectedPythFeed.id.slice(0, 20)}...
-                </p>
-              )}
-            </div>
-
-            <div className="space-y-2">
-              <label className="block font-mono text-sm text-gray-400">
-                TARGET PRICE (USD)
-              </label>
-              <div className="relative">
-                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 font-mono">
-                  $
-                </span>
-                <input
-                  type="number"
-                  value={targetPrice}
-                  onChange={(e) => setTargetPrice(e.target.value)}
-                  placeholder="100000.00"
-                  step="0.01"
-                  min="0"
-                  className="w-full bg-void border-2 border-gray-700 focus:border-matrix text-white font-mono p-3 pl-8 transition-colors outline-none"
-                  disabled={loading}
-                />
-              </div>
-              <p className="text-gray-500 text-xs font-mono">
-                Market resolves YES if price reaches this target before end time
-              </p>
-            </div>
-          </>
-        )}
 
         {/* End Date/Time */}
         <div className="space-y-4">
@@ -541,6 +391,17 @@ export default function CreateMarketForm() {
             ⚠️ {error}
           </div>
         )}
+
+        {/* Creation Fee Info */}
+        <div className="border border-gray-700 bg-gray-900/50 p-4">
+          <div className="flex items-center justify-between">
+            <span className="font-mono text-sm text-gray-400">CREATION FEE</span>
+            <span className="font-mono text-sm text-matrix">{MARKET_CREATION_FEE} SOL</span>
+          </div>
+          <p className="text-gray-500 text-xs font-mono mt-1">
+            A small fee to prevent spam and support the platform
+          </p>
+        </div>
 
         {/* Submit */}
         <div className="flex gap-4">

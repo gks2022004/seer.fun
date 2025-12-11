@@ -6,10 +6,10 @@ seeds = false
 skip-lint = false
 
 [programs.localnet]
-seer_program = "5d9gPjzVJsPaVhw1LvSj8RBr2MXSca12mTQoh63CmN74"
+seer_program = "5XrAkDuDwvsqVxMkVETukYdAjuACH3poCAcP4hZJoKSQ"
 
 [programs.devnet]
-seer_program = "5d9gPjzVJsPaVhw1LvSj8RBr2MXSca12mTQoh63CmN74"
+seer_program = "5XrAkDuDwvsqVxMkVETukYdAjuACH3poCAcP4hZJoKSQ"
 
 [registry]
 url = "https://api.apr.dev"

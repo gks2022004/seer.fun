@@ -5,9 +5,9 @@ import { useWallet, useConnection } from "@solana/wallet-adapter-react";
 import { PublicKey, Transaction, SystemProgram } from "@solana/web3.js";
 import Link from "next/link";
 import { useSingleMarket, MarketOddsBar, MarketStats, MarketStatusBadge } from "@/hooks/use-markets";
-import { createBetTransaction, formatSol, calculateOdds, getUserPositionPDA, getMarketVaultPDA, programId, connection as solanaConnection, createResolveMarketTransaction, createAutoResolvePriceMarketTransaction } from "@/lib/solana";
-import { PYTH_FEEDS_ARRAY } from "@/lib/pyth-feeds";
+import { createBetTransaction, formatSol, calculateOdds, getUserPositionPDA, getMarketVaultPDA, programId, connection as solanaConnection, createResolveMarketTransaction } from "@/lib/solana";
 import ShareMarket from "./share-market";
+import OddsChart from "./odds-chart";
 
 const BET_AMOUNTS = [0.1, 0.25, 0.5, 1, 2, 5];
 
@@ -32,10 +32,39 @@ export default function MarketDetail({ marketId }: MarketDetailProps) {
   const [placing, setPlacing] = useState(false);
   const [claiming, setClaiming] = useState(false);
   const [resolving, setResolving] = useState(false);
-  const [autoResolving, setAutoResolving] = useState(false);
   const [txError, setTxError] = useState<string | null>(null);
   const [txSuccess, setTxSuccess] = useState<string | null>(null);
   const [userPosition, setUserPosition] = useState<UserPosition | null>(null);
+  
+  // AI Resolution state
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiSuggestion, setAiSuggestion] = useState<{
+    suggestedOutcome: boolean;
+    confidence: number;
+    reasoning: string;
+    sources: string[];
+  } | null>(null);
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [marketCreatedAt, setMarketCreatedAt] = useState<number | undefined>(undefined);
+
+  // Fetch market creation timestamp
+  useEffect(() => {
+    const fetchCreationTime = async () => {
+      try {
+        const marketPubkey = new PublicKey(marketId);
+        const signatures = await solanaConnection.getSignaturesForAddress(marketPubkey, { limit: 1 });
+        if (signatures.length > 0 && signatures[0].blockTime) {
+          setMarketCreatedAt(signatures[0].blockTime);
+        }
+      } catch (e) {
+        console.error("Error fetching market creation time:", e);
+      }
+    };
+    
+    if (marketId) {
+      fetchCreationTime();
+    }
+  }, [marketId]);
 
   // Fetch user's position in this market
   const fetchUserPosition = useCallback(async () => {
@@ -121,7 +150,16 @@ export default function MarketDetail({ marketId }: MarketDetailProps) {
       // claim_winnings discriminator: [161, 215, 24, 59, 14, 236, 242, 221]
       const discriminator = Buffer.from([161, 215, 24, 59, 14, 236, 242, 221]);
 
-      const transaction = new Transaction().add({
+      const transaction = new Transaction();
+      
+      // Add compute budget for priority
+      const { ComputeBudgetProgram } = await import("@solana/web3.js");
+      transaction.add(
+        ComputeBudgetProgram.setComputeUnitLimit({ units: 200000 }),
+        ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 50000 })
+      );
+
+      transaction.add({
         keys: [
           { pubkey: publicKey, isSigner: true, isWritable: true },
           { pubkey: marketPubkey, isSigner: false, isWritable: false },
@@ -133,13 +171,21 @@ export default function MarketDetail({ marketId }: MarketDetailProps) {
         data: discriminator,
       });
 
-      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
+      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash("confirmed");
       transaction.recentBlockhash = blockhash;
       transaction.lastValidBlockHeight = lastValidBlockHeight;
       transaction.feePayer = publicKey;
 
-      const signature = await sendTransaction(transaction, connection);
-      await connection.confirmTransaction(signature, "confirmed");
+      const signature = await sendTransaction(transaction, connection, {
+        skipPreflight: true,
+        preflightCommitment: "confirmed",
+      });
+      
+      await connection.confirmTransaction({
+        signature,
+        blockhash,
+        lastValidBlockHeight,
+      }, "confirmed");
 
       const winnings = calculateWinnings();
       setTxSuccess(`Claimed ${formatSol(winnings)} SOL! Tx: ${signature.slice(0, 8)}...`);
@@ -183,31 +229,41 @@ export default function MarketDetail({ marketId }: MarketDetailProps) {
     }
   };
 
-  const handleAutoResolveMarket = async () => {
-    if (!publicKey || !market || !market.pythFeedId) return;
+  // Get AI suggestion for market resolution
+  const handleGetAiSuggestion = async () => {
+    if (!market) return;
 
     try {
-      setAutoResolving(true);
-      setTxError(null);
-      setTxSuccess(null);
+      setAiLoading(true);
+      setAiError(null);
+      setAiSuggestion(null);
 
-      const marketPubkey = new PublicKey(marketId);
-      const transaction = await createAutoResolvePriceMarketTransaction(
-        publicKey,
-        marketPubkey,
-        market.pythFeedId
-      );
+      const response = await fetch("/api/ai/suggest", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          question: market.question,
+          endTime: Number(market.endTime),
+        }),
+      });
 
-      const signature = await sendTransaction(transaction, connection);
-      await connection.confirmTransaction(signature, "confirmed");
+      const data = await response.json();
 
-      setTxSuccess(`Price market auto-resolved! Tx: ${signature.slice(0, 8)}...`);
-      refetch();
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to get AI suggestion");
+      }
+
+      setAiSuggestion({
+        suggestedOutcome: data.suggestedOutcome,
+        confidence: data.confidence,
+        reasoning: data.reasoning,
+        sources: data.sources || [],
+      });
     } catch (e) {
-      console.error("Error auto-resolving market:", e);
-      setTxError(e instanceof Error ? e.message : "Failed to auto-resolve market");
+      console.error("Error getting AI suggestion:", e);
+      setAiError(e instanceof Error ? e.message : "Failed to get AI suggestion");
     } finally {
-      setAutoResolving(false);
+      setAiLoading(false);
     }
   };
 
@@ -313,6 +369,14 @@ export default function MarketDetail({ marketId }: MarketDetailProps) {
           endTime={market.endTime}
         />
       </div>
+
+      {/* Odds Chart */}
+      <OddsChart
+        yesPercent={odds.yes}
+        noPercent={odds.no}
+        totalPool={formatSol(market.yesAmount + market.noAmount)}
+        marketCreatedAt={marketCreatedAt}
+      />
 
       {/* Betting Interface */}
       {isBettingOpen && (
@@ -427,73 +491,9 @@ export default function MarketDetail({ marketId }: MarketDetailProps) {
         </div>
       )}
 
-      {/* Auto-Resolve Price Market Section - Anyone can trigger when betting has ended */}
+      {/* Resolve Market Section - Only for creator when betting has ended */}
       {publicKey && 
        !market.resolved && 
-       market.marketType && 'price' in market.marketType &&
-       Date.now() / 1000 >= Number(market.endTime) && (
-        <div className="border border-purple-500 p-6 bg-purple-500/10">
-          <h2 className="font-vt323 text-xl text-purple-400 mb-2">AUTO-RESOLVE PRICE MARKET</h2>
-          <p className="text-gray-400 font-mono text-sm mb-2">
-            This is a price-based market that automatically resolves using Pyth Oracle data.
-          </p>
-          {market.pythFeedId && market.targetPrice && (
-            <div className="bg-void/50 p-3 mb-4 border border-gray-800">
-              <div className="grid grid-cols-2 gap-4 text-sm font-mono">
-                <div>
-                  <span className="text-gray-500">ASSET: </span>
-                  <span className="text-white">
-                    {PYTH_FEEDS_ARRAY.find(f => f.id === market.pythFeedId)?.symbol || "Unknown"}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-gray-500">TARGET PRICE: </span>
-                  <span className="text-matrix">${(Number(market.targetPrice) / 100).toLocaleString()}</span>
-                </div>
-              </div>
-            </div>
-          )}
-          <p className="text-gray-400 font-mono text-xs mb-4">
-            Anyone can trigger resolution. The oracle will check if the price reached the target.
-          </p>
-          
-          <button
-            onClick={handleAutoResolveMarket}
-            disabled={autoResolving}
-            className="w-full py-4 border-2 border-purple-500 bg-purple-500/20 text-purple-400 font-vt323 text-xl hover:bg-purple-500/30 transition-all disabled:opacity-50"
-          >
-            {autoResolving ? "AUTO-RESOLVING..." : "AUTO-RESOLVE WITH PYTH ORACLE"}
-          </button>
-
-          {/* Transaction Status */}
-          {txError && (
-            <div className="border border-cyber bg-cyber/10 p-3 mt-4">
-              <div className="text-cyber font-mono text-sm mb-2">{txError}</div>
-              {txError.includes("price feed not found") && (
-                <div className="text-gray-400 font-mono text-xs mt-2 p-2 bg-void/50 border border-gray-700">
-                  <div className="mb-1">💡 <strong>Pyth Price Feeds on Devnet:</strong></div>
-                  <div className="ml-4 space-y-1">
-                    <div>• Pyth uses a &quot;pull&quot; model - prices must be posted on-chain before use</div>
-                    <div>• For devnet testing, price feeds may not be regularly updated</div>
-                    <div>• Consider using Event Markets for devnet testing</div>
-                    <div>• Price Markets work best on mainnet with active Pyth feeds</div>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-          {txSuccess && (
-            <div className="border border-matrix bg-matrix/10 p-3 text-matrix font-mono text-sm mt-4">
-               {txSuccess}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Resolve Market Section - Only for creator when betting has ended (Event markets only) */}
-      {publicKey && 
-       !market.resolved && 
-       market.marketType && 'event' in market.marketType &&
        market.creator === publicKey.toBase58() && 
        Date.now() / 1000 >= Number(market.endTime) && (
         <div className="border border-yellow-500 p-6 bg-yellow-500/10">
@@ -501,22 +501,97 @@ export default function MarketDetail({ marketId }: MarketDetailProps) {
           <p className="text-gray-400 font-mono text-sm mb-4">
             As the market creator, you can now resolve this market. Choose the winning outcome:
           </p>
-          
-          <div className="grid grid-cols-2 gap-4 mb-4">
-            <button
-              onClick={() => handleResolveMarket(true)}
-              disabled={resolving}
-              className="py-4 border-2 border-matrix bg-matrix/20 text-matrix font-vt323 text-xl hover:bg-matrix/30 transition-all disabled:opacity-50"
-            >
-              {resolving ? "RESOLVING..." : "RESOLVE: YES WINS"}
-            </button>
-            <button
-              onClick={() => handleResolveMarket(false)}
-              disabled={resolving}
-              className="py-4 border-2 border-cyber bg-cyber/20 text-cyber font-vt323 text-xl hover:bg-cyber/30 transition-all disabled:opacity-50"
-            >
-              {resolving ? "RESOLVING..." : "RESOLVE: NO WINS"}
-            </button>
+
+          {/* AI Suggestion Section */}
+          <div className="mb-6 p-4 border border-purple-500/50 bg-purple-500/10">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-vt323 text-lg text-purple-400">AI RESOLUTION ASSISTANT</h3>
+              <button
+                onClick={handleGetAiSuggestion}
+                disabled={aiLoading}
+                className="px-4 py-2 border border-purple-500 bg-purple-500/20 text-purple-300 font-mono text-sm hover:bg-purple-500/30 transition-all disabled:opacity-50"
+              >
+                {aiLoading ? "ANALYZING..." : "GET AI SUGGESTION"}
+              </button>
+            </div>
+            
+            {aiError && (
+              <div className="text-cyber font-mono text-sm p-2 bg-cyber/10 border border-cyber/30">
+                ⚠️ {aiError}
+              </div>
+            )}
+            
+            {aiSuggestion && (
+              <div className="space-y-3">
+                <div className="flex items-center gap-4">
+                  <div className={`px-4 py-2 font-vt323 text-xl ${
+                    aiSuggestion.suggestedOutcome 
+                      ? "bg-matrix/20 border border-matrix text-matrix" 
+                      : "bg-cyber/20 border border-cyber text-cyber"
+                  }`}>
+                    AI SUGGESTS: {aiSuggestion.suggestedOutcome ? "YES" : "NO"}
+                  </div>
+                  <div className="font-mono text-sm">
+                    <span className="text-gray-400">Confidence:</span>{" "}
+                    <span className={`font-bold ${
+                      aiSuggestion.confidence >= 80 ? "text-matrix" :
+                      aiSuggestion.confidence >= 50 ? "text-yellow-400" : "text-cyber"
+                    }`}>
+                      {aiSuggestion.confidence}%
+                    </span>
+                  </div>
+                </div>
+                
+                <div className="text-gray-300 font-mono text-sm p-3 bg-void/50 border border-gray-700">
+                  <div className="text-gray-500 text-xs mb-1">REASONING:</div>
+                  {aiSuggestion.reasoning}
+                </div>
+                
+                {aiSuggestion.sources.length > 0 && (
+                  <div className="text-gray-400 font-mono text-xs">
+                    <span className="text-gray-500">Sources:</span> {aiSuggestion.sources.join(", ")}
+                  </div>
+                )}
+                
+                <button
+                  onClick={() => handleResolveMarket(aiSuggestion.suggestedOutcome)}
+                  disabled={resolving}
+                  className={`w-full py-3 font-vt323 text-lg transition-all disabled:opacity-50 ${
+                    aiSuggestion.suggestedOutcome
+                      ? "border-2 border-matrix bg-matrix/20 text-matrix hover:bg-matrix/30"
+                      : "border-2 border-cyber bg-cyber/20 text-cyber hover:bg-cyber/30"
+                  }`}
+                >
+                  {resolving ? "RESOLVING..." : `ACCEPT AI: RESOLVE AS ${aiSuggestion.suggestedOutcome ? "YES" : "NO"}`}
+                </button>
+              </div>
+            )}
+            
+            {!aiSuggestion && !aiError && !aiLoading && (
+              <p className="text-gray-500 font-mono text-xs">
+                Click &quot;Get AI Suggestion&quot; to analyze real-world data and get a resolution recommendation using Perplexity AI.
+              </p>
+            )}
+          </div>
+
+          <div className="border-t border-yellow-500/30 pt-4 mt-4">
+            <p className="text-gray-500 font-mono text-xs mb-3">Or resolve manually:</p>
+            <div className="grid grid-cols-2 gap-4 mb-4">
+              <button
+                onClick={() => handleResolveMarket(true)}
+                disabled={resolving}
+                className="py-4 border-2 border-matrix bg-matrix/20 text-matrix font-vt323 text-xl hover:bg-matrix/30 transition-all disabled:opacity-50"
+              >
+                {resolving ? "RESOLVING..." : "RESOLVE: YES WINS"}
+              </button>
+              <button
+                onClick={() => handleResolveMarket(false)}
+                disabled={resolving}
+                className="py-4 border-2 border-cyber bg-cyber/20 text-cyber font-vt323 text-xl hover:bg-cyber/30 transition-all disabled:opacity-50"
+              >
+                {resolving ? "RESOLVING..." : "RESOLVE: NO WINS"}
+              </button>
+            </div>
           </div>
 
           {/* Transaction Status */}
