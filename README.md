@@ -1,118 +1,121 @@
 # Seer.fun
 
-A decentralized prediction market platform built on Solana with AI-powered resolution and native Twitter/X integration via Solana Blinks.
+A decentralized prediction market platform built on Solana, featuring AI-powered market resolution and native Twitter/X integration through Solana Blinks.
 
 ## Overview
 
-Seer.fun enables users to create and participate in prediction markets directly from Twitter. Users can bet on real-world events using SOL, with outcomes intelligently resolved using AI-powered analysis from Perplexity, then confirmed by market creators.
+Seer.fun is a prediction market platform that enables users to create and participate in markets on real-world events. The platform leverages Solana blockchain for on-chain settlement, Perplexity AI for intelligent market resolution, and Solana Blinks for seamless Twitter/X integration.
 
-## Features
+## Key Features
 
-- **AI-Powered Resolution**: Markets are resolved using Perplexity AI that analyzes real-world data and provides resolution suggestions with confidence scores
-- **Prediction Markets**: Create yes/no markets on any topic with customizable end times
-- **Solana Blinks**: Place bets directly from Twitter/X without leaving the app
-- **On-chain Settlement**: All bets and payouts are handled by Solana smart contracts
-- **Shareable Markets**: Generate Blink URLs to share markets on social media
-- **Professional Charts**: Real-time odds visualization with interactive charting
+- **AI-Assisted Resolution**: Automated market resolution using Perplexity AI with real-time web search and confidence scoring
+- **Decentralized Markets**: Creator-initiated yes/no prediction markets with customizable end times
+- **Social Integration**: Direct betting from Twitter/X through Solana Blinks without leaving the platform
+- **On-Chain Settlement**: Trustless bet settlement and payout distribution via Solana smart contracts
+- **Real-Time Analytics**: Interactive charts displaying market odds and participation metrics
 
-## Tech Stack
+## Technology Stack
 
-- **Frontend**: Next.js 14, React, TypeScript, Tailwind CSS, Recharts
-- **Blockchain**: Solana, Anchor Framework
-- **AI Resolution**: Perplexity API (Sonar model with real-time web search)
-- **Wallet**: Solana Wallet Adapter (Phantom, Solflare, etc.)
-- **Actions**: Solana Actions / Blinks
+**Frontend**
+- Next.js 14 (App Router)
+- React with TypeScript
+- Tailwind CSS
+- Recharts for data visualization
 
-## Project Structure
+**Blockchain**
+- Solana (Devnet/Mainnet)
+- Anchor Framework
+- Solana Wallet Adapter
+
+**AI & APIs**
+- Perplexity API (Sonar model)
+- Solana Actions/Blinks
+
+## Architecture
 
 ```
 seer.fun/
 ├── src/
-│   ├── app/                    # Next.js app router pages
+│   ├── app/
 │   │   ├── api/
-│   │   │   ├── actions/        # Blink API endpoints
-│   │   │   └── ai/suggest/     # AI resolution API
-│   │   ├── dashboard/          # Market dashboard pages
-│   │   └── market/             # Market detail pages
-│   ├── components/             # React components
-│   ├── hooks/                  # Custom React hooks
-│   └── lib/                    # Utility functions and Solana helpers
-│       ├── perplexity.ts       # AI resolution service
-│       └── seer-program.ts     # Program IDL and types
+│   │   │   ├── actions/          # Solana Blink endpoints
+│   │   │   └── ai/suggest/       # AI resolution service
+│   │   ├── dashboard/            # Market management interface
+│   │   └── market/               # Market detail views
+│   ├── components/               # React components
+│   ├── hooks/                    # Custom React hooks
+│   └── lib/
+│       ├── perplexity.ts         # AI resolution integration
+│       └── seer-program.ts       # Program IDL and utilities
 ├── anchor/
-│   ├── programs/seer_program/  # Solana smart contract (Rust)
-│   └── tests/                  # Contract tests
-└── public/                     # Static assets
+│   ├── programs/seer_program/    # Rust smart contract
+│   └── tests/                    # Contract test suite
+└── public/                       # Static assets
 ```
 
 ## Smart Contract
 
-The Seer program is deployed on Solana Devnet:
+**Program ID (Devnet)**: `BwGjxxo2jjAE1aACq4L74L2WzaLjFrxuvvbTMxHyrKbS`
 
-```
-Program ID: BwGjxxo2jjAE1aACq4L74L2WzaLjFrxuvvbTMxHyrKbS
-```
+### Contract Instructions
 
-### Instructions
+| Instruction | Description | Access |
+|-------------|-------------|--------|
+| `initialize_market` | Create a new prediction market | Public |
+| `place_bet` | Place YES or NO bet on a market | Public |
+| `resolve_market` | Resolve market outcome | Creator only |
+| `claim_winnings` | Withdraw winnings from resolved market | Winners only |
 
-| Instruction | Description |
-|-------------|-------------|
-| `initialize_market` | Create a new prediction market |
-| `place_bet` | Place a YES or NO bet on a market |
-| `resolve_market` | Resolve a market (creator only, can use AI suggestion) |
-| `claim_winnings` | Claim winnings from a resolved market |
+### AI-Assisted Resolution Process
 
-### Resolution Flow
+1. Market creator initiates AI suggestion request
+2. Perplexity AI analyzes current real-world data via web search
+3. AI returns recommendation with outcome, confidence score, and reasoning
+4. Creator reviews and confirms or overrides the suggestion
+5. Market resolves on-chain, enabling winner claims
 
-All markets use AI-assisted resolution:
-
-1. Market creator clicks "Get AI Suggestion"
-2. Perplexity AI analyzes real-world data via web search
-3. AI returns suggested outcome (YES/NO) with confidence % and reasoning
-4. Creator reviews and confirms the resolution
-5. Smart contract settles and winners can claim
-
-## Getting Started
+## Installation
 
 ### Prerequisites
 
-- Node.js 18+
+- Node.js 18 or higher
 - Solana CLI
-- Anchor CLI (for smart contract development)
-- A Solana wallet (Phantom recommended)
+- Anchor CLI (for contract development)
+- Solana-compatible wallet
 
-### Installation
+### Setup
 
 ```bash
-# Clone the repository
+# Clone repository
 git clone https://github.com/gks2022004/seer.fun.git
 cd seer.fun
 
 # Install dependencies
 npm install
 
-# Set up environment variables
+# Configure environment
 cp .env.example .env.local
-# Edit .env.local with your RPC URL
 ```
 
-### Environment Variables
+### Environment Configuration
 
-```bash
+Required environment variables:
+
+```env
 NEXT_PUBLIC_SOLANA_RPC=https://api.devnet.solana.com
-PERPLEXITY_API_KEY=your_perplexity_api_key_here
+PERPLEXITY_API_KEY=your_api_key
 ```
 
-### Development
+### Development Commands
 
 ```bash
-# Start the development server
+# Start development server
 npm run dev
 
-# Build for production
+# Production build
 npm run build
 
-# Run linting
+# Code linting
 npm run lint
 ```
 
@@ -121,90 +124,97 @@ npm run lint
 ```bash
 cd anchor
 
-# Build the program
+# Compile program
 anchor build
 
-# Run tests
+# Run test suite
 anchor test
 
 # Deploy to devnet
 anchor deploy
 ```
 
-## API Endpoints
+## API Reference
 
-### Blink Actions
+### Blink Actions API
 
+**Get Market Metadata**
 ```
-GET  /api/actions/bet/[marketId]  - Get Blink metadata for a market
-POST /api/actions/bet/[marketId]  - Create bet transaction
-```
-
-### AI Resolution
-
-```
-POST /api/ai/suggest               - Get AI resolution suggestion
-     Body: { question: string, endTime: number }
-     Returns: { suggestedOutcome: boolean, confidence: number, reasoning: string, sources: string[] }
+GET /api/actions/bet/[marketId]
 ```
 
-### Actions JSON
+**Create Bet Transaction**
+```
+POST /api/actions/bet/[marketId]
+Body: { account: string, amount: string }
+```
+
+### AI Resolution API
+
+**Request Resolution Suggestion**
+```
+POST /api/ai/suggest
+Body: { question: string, endTime: number }
+Response: {
+  suggestedOutcome: boolean,
+  confidence: number,
+  reasoning: string,
+  sources: string[]
+}
+```
+
+### Blink Discovery
 
 ```
-GET  /.well-known/actions.json    - Blink discovery manifest
+GET /.well-known/actions.json
 ```
 
-## Usage
+## Usage Guide
 
 ### Creating a Market
 
-1. Connect your Solana wallet
-2. Navigate to Dashboard > Create Market
-3. Enter your prediction question
-4. Set the market end time
-5. Submit the transaction
+1. Connect Solana wallet to the application
+2. Navigate to Dashboard and select "Create Market"
+3. Define prediction question and set end time
+4. Submit transaction and await confirmation
 
 ### Placing Bets
 
-**Via Web App:**
-1. Browse markets on the dashboard
-2. Select a market
-3. Choose YES or NO
-4. Enter bet amount and confirm
+**Web Application**
+1. Browse active markets on dashboard
+2. Select target market and choose position (YES/NO)
+3. Enter bet amount in SOL
+4. Sign and submit transaction
 
-**Via Twitter/X:**
-1. Paste the market Blink URL in a tweet
-2. The Blink card will render with betting options
-3. Click to place bet directly from Twitter
+**Twitter/X Integration**
+1. Share market Blink URL on Twitter/X
+2. Blink renders as interactive card with market details
+3. Users bet directly from Twitter interface
 
 ### Resolving Markets
 
-When a market ends, the creator can:
+Creator workflow for ended markets:
 
-1. Click "Get AI Suggestion" 
-2. Review AI analysis with:
-   - Suggested outcome (YES/NO)
-   - Confidence percentage
-   - Reasoning with sources
-3. Accept AI suggestion or manually choose outcome
-4. Confirm resolution on-chain
-
-The AI uses Perplexity's real-time web search to analyze current events and provide data-backed recommendations.
+1. Access market detail page
+2. Request AI resolution suggestion
+3. Review AI-generated analysis including outcome, confidence, and supporting evidence
+4. Confirm or manually override the suggested outcome
+5. Submit resolution transaction
 
 ### Claiming Winnings
 
-After a market resolves, winning bettors can claim their share of the pool proportional to their bet size.
+Winners claim proportional share of total bet pool based on their contribution to the winning side.
 
 ## Deployment
 
-### Frontend (Vercel)
+### Frontend Deployment (Vercel)
 
 ```bash
 npm run build
-# Deploy to Vercel via Git integration or CLI
+vercel deploy
 ```
 
-### Smart Contract (Mainnet)
+### Smart Contract Deployment (Mainnet)
 
 ```bash
 solana config set --url mainnet-beta
@@ -213,15 +223,22 @@ anchor build
 anchor deploy --provider.cluster mainnet
 ```
 
+Update program ID in frontend configuration after deployment.
+
 ## Testing
 
 ```bash
-# Frontend tests
+# Frontend test suite
 npm run test
 
 # Smart contract tests
 cd anchor
 anchor test
 ```
+
+
+## Support
+
+For issues and questions, please open an issue on the GitHub repository.
 
 
