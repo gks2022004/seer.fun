@@ -44,7 +44,7 @@ export default function UserPositions() {
       // UserPosition discriminator: [251, 248, 209, 245, 83, 234, 17, 27]
       const accounts = await connection.getProgramAccounts(programPubkey, {
         filters: [
-          { dataSize: 90 }, // Approximate size of UserPosition
+          { dataSize: 98 }, // UserPosition size (32+32+8+8+1+1+8 = 90 -> 98 with claimed_amount)
           {
             memcmp: {
               offset: 8, // After discriminator
@@ -152,9 +152,9 @@ export default function UserPositions() {
       const discriminator = Buffer.from([161, 215, 24, 59, 14, 236, 242, 221]);
 
       const { ComputeBudgetProgram } = await import("@solana/web3.js");
-      
+
       const transaction = new Transaction();
-      
+
       // Add compute budget for priority
       transaction.add(
         ComputeBudgetProgram.setComputeUnitLimit({ units: 200000 }),
@@ -164,7 +164,7 @@ export default function UserPositions() {
       transaction.add({
         keys: [
           { pubkey: publicKey, isSigner: true, isWritable: true },
-          { pubkey: marketPubkey, isSigner: false, isWritable: false },
+          { pubkey: marketPubkey, isSigner: false, isWritable: true }, // Market is mutable (tracks total_claimed)
           { pubkey: marketVault, isSigner: false, isWritable: true },
           { pubkey: userPosition, isSigner: false, isWritable: true },
           { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
@@ -182,7 +182,7 @@ export default function UserPositions() {
         skipPreflight: true,
         preflightCommitment: "confirmed",
       });
-      
+
       await walletConnection.confirmTransaction({
         signature,
         blockhash,
@@ -201,19 +201,19 @@ export default function UserPositions() {
 
   const calculateWinnings = (position: Position): bigint => {
     if (!position.marketResolved) return BigInt(0);
-    
+
     const totalPool = position.totalYes + position.totalNo;
     const winningPool = position.marketOutcome ? position.totalYes : position.totalNo;
     const userBet = position.marketOutcome ? position.yesAmount : position.noAmount;
-    
+
     if (winningPool === BigInt(0) || userBet === BigInt(0)) return BigInt(0);
-    
+
     return (userBet * totalPool) / winningPool;
   };
 
   const isWinner = (position: Position): boolean => {
     if (!position.marketResolved) return false;
-    return position.marketOutcome 
+    return position.marketOutcome
       ? position.yesAmount > BigInt(0)
       : position.noAmount > BigInt(0);
   };
@@ -337,25 +337,23 @@ export default function UserPositions() {
             return (
               <div
                 key={position.marketPubkey}
-                className={`border p-4 ${
-                  position.marketResolved
-                    ? winner
-                      ? "border-matrix/50 bg-matrix/5"
-                      : "border-cyber/50 bg-cyber/5"
-                    : "border-gray-800"
-                }`}
+                className={`border p-4 ${position.marketResolved
+                  ? winner
+                    ? "border-matrix/50 bg-matrix/5"
+                    : "border-cyber/50 bg-cyber/5"
+                  : "border-gray-800"
+                  }`}
               >
                 <div className="flex items-start justify-between mb-3">
-                  <Link 
+                  <Link
                     href={`/dashboard/market/${position.marketPubkey}`}
                     className="font-mono text-white hover:text-matrix transition-colors flex-1 pr-4"
                   >
                     {position.question}
                   </Link>
                   {position.marketResolved && (
-                    <span className={`px-2 py-0.5 text-xs font-mono ${
-                      winner ? "bg-matrix/20 text-matrix" : "bg-cyber/20 text-cyber"
-                    }`}>
+                    <span className={`px-2 py-0.5 text-xs font-mono ${winner ? "bg-matrix/20 text-matrix" : "bg-cyber/20 text-cyber"
+                      }`}>
                       {winner ? "WON" : "LOST"}
                     </span>
                   )}
@@ -381,9 +379,9 @@ export default function UserPositions() {
                       {position.claimed ? "CLAIMED" : "WINNINGS"}
                     </div>
                     <div className={winner ? "text-matrix" : "text-gray-400"}>
-                      {position.claimed 
-                        ? "CLAIMED" 
-                        : winner 
+                      {position.claimed
+                        ? "CLAIMED"
+                        : winner
                           ? `${formatSol(winnings)} SOL`
                           : "-"
                       }

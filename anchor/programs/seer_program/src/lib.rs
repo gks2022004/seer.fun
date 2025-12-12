@@ -1,17 +1,35 @@
 use anchor_lang::prelude::*;
 use anchor_lang::system_program;
 
-declare_id!("5XrAkDuDwvsqVxMkVETukYdAjuACH3poCAcP4hZJoKSQ");
+declare_id!("R8Q5AaY9CnWqnhobPQ9LtTGewdpnJ3NoGNGxyKicqfg");
 
 // Market creation fee: 0.01 SOL
 pub const MARKET_CREATION_FEE: u64 = 10_000_000; // 0.01 SOL in lamports
 
-// Treasury address to receive fees (change this to your wallet)
-pub const TREASURY: &str = "BfxvKDgh3nWpM5JX2NF7M7MJLirJkuWHMM3n5JohStx";
+// Minimum rent-exempt balance for vault PDA
+pub const VAULT_RENT_RESERVE: u64 = 890880; // ~0.00089 SOL
 
 #[program]
 pub mod seer_program {
     use super::*;
+
+    /// Initialize program configuration (call once after deployment)
+    pub fn initialize_config(ctx: Context<InitializeConfig>, treasury: Pubkey) -> Result<()> {
+        let config = &mut ctx.accounts.config;
+        config.authority = ctx.accounts.authority.key();
+        config.treasury = treasury;
+        config.bump = ctx.bumps.config;
+        Ok(())
+    }
+
+    /// Update treasury address (only authority can call)
+    pub fn update_treasury(ctx: Context<UpdateConfig>, new_treasury: Pubkey) -> Result<()> {
+        let config = &mut ctx.accounts.config;
+        config.treasury = new_treasury;
+        
+        msg!("Treasury updated to: {}", new_treasury);
+        Ok(())
+    }
 
     /// Initialize a new prediction market (charges 0.01 SOL fee)
     pub fn initialize_market(
@@ -23,7 +41,7 @@ pub mod seer_program {
         require!(question.len() <= 200, SeerError::QuestionTooLong);
         require!(end_time > Clock::get()?.unix_timestamp, SeerError::InvalidEndTime);
 
-        // Charge market creation fee
+        // Charge market creation fee to treasury from config
         let cpi_context = CpiContext::new(
             ctx.accounts.system_program.to_account_info(),
             system_program::Transfer {
@@ -32,6 +50,16 @@ pub mod seer_program {
             },
         );
         system_program::transfer(cpi_context, MARKET_CREATION_FEE)?;
+
+        // Initialize vault with rent-exempt amount
+        let vault_init_cpi = CpiContext::new(
+            ctx.accounts.system_program.to_account_info(),
+            system_program::Transfer {
+                from: ctx.accounts.creator.to_account_info(),
+                to: ctx.accounts.market_vault.to_account_info(),
+            },
+        );
+        system_program::transfer(vault_init_cpi, VAULT_RENT_RESERVE)?;
 
         let market = &mut ctx.accounts.market;
         market.creator = ctx.accounts.creator.key();
@@ -43,6 +71,7 @@ pub mod seer_program {
         market.end_time = end_time;
         market.bump = ctx.bumps.market;
         market.total_bettors = 0;
+        market.total_claimed = 0; // Track total claimed amount
 
         msg!("Market created: {}", market.key());
         msg!("Creator: {}", market.creator);
@@ -110,7 +139,6 @@ pub mod seer_program {
     }
 
     /// Resolve the market (only creator can resolve)
-    /// Creator can use AI suggestion from Perplexity to determine outcome
     pub fn resolve_market(
         ctx: Context<ResolveMarket>,
         outcome: bool, // true = YES wins, false = NO wins
@@ -137,21 +165,22 @@ pub mod seer_program {
 
     /// Claim winnings after market is resolved
     pub fn claim_winnings(ctx: Context<ClaimWinnings>) -> Result<()> {
-        let market = &ctx.accounts.market;
-        let position = &ctx.accounts.user_position;
+        let market = &mut ctx.accounts.market;
+        let position = &mut ctx.accounts.user_position;
 
         require!(market.resolved, SeerError::MarketNotResolved);
         require!(!position.claimed, SeerError::AlreadyClaimed);
 
-        // Calculate winnings
-        let user_bet = if market.outcome {
+        // Determine user's winning bet amount
+        let user_winning_bet = if market.outcome {
             position.yes_amount
         } else {
             position.no_amount
         };
 
-        require!(user_bet > 0, SeerError::NoWinningPosition);
+        require!(user_winning_bet > 0, SeerError::NoWinningPosition);
 
+        // Get winning and total pools
         let winning_pool = if market.outcome {
             market.yes_amount
         } else {
@@ -160,21 +189,32 @@ pub mod seer_program {
 
         let total_pool = market.yes_amount.checked_add(market.no_amount).unwrap();
         
-        // Calculate proportional winnings: (user_bet / winning_pool) * total_pool
-        let winnings = (user_bet as u128)
+        require!(winning_pool > 0, SeerError::InvalidWinningPool);
+
+        // Calculate proportional winnings: (user_winning_bet / winning_pool) * total_pool
+        // Using u128 to prevent overflow
+        let winnings = (user_winning_bet as u128)
             .checked_mul(total_pool as u128)
             .unwrap()
             .checked_div(winning_pool as u128)
             .unwrap() as u64;
 
-        // Get vault balance and determine actual transfer amount
+        // Get available vault balance (subtract rent reserve)
         let vault_balance = ctx.accounts.market_vault.lamports();
+        require!(
+            vault_balance > VAULT_RENT_RESERVE,
+            SeerError::InsufficientVaultBalance
+        );
         
-        // Transfer all available funds from vault (handles dust and rent issues)
-        // If vault has less than calculated winnings due to rounding, transfer what's available
-        let actual_transfer = std::cmp::min(winnings, vault_balance);
+        let available_balance = vault_balance.checked_sub(VAULT_RENT_RESERVE).unwrap();
         
-        // Transfer winnings from vault to user
+        // Verify sufficient funds before transfer
+        require!(
+            available_balance >= winnings,
+            SeerError::InsufficientVaultBalance
+        );
+
+        // Transfer winnings from vault to user using PDA signer
         let market_key = market.key();
         let seeds = &[
             b"vault",
@@ -183,30 +223,61 @@ pub mod seer_program {
         ];
         let signer = &[&seeds[..]];
 
-        // Use direct lamport manipulation to avoid rent issues
-        // This allows us to drain the PDA completely
-        **ctx.accounts.market_vault.try_borrow_mut_lamports()? = ctx
-            .accounts
-            .market_vault
-            .lamports()
-            .checked_sub(actual_transfer)
-            .unwrap();
-        **ctx.accounts.bettor.try_borrow_mut_lamports()? = ctx
-            .accounts
-            .bettor
-            .lamports()
-            .checked_add(actual_transfer)
-            .unwrap();
+        let transfer_cpi = CpiContext::new_with_signer(
+            ctx.accounts.system_program.to_account_info(),
+            system_program::Transfer {
+                from: ctx.accounts.market_vault.to_account_info(),
+                to: ctx.accounts.bettor.to_account_info(),
+            },
+            signer,
+        );
+        system_program::transfer(transfer_cpi, winnings)?;
 
-        // Mark as claimed
-        let position = &mut ctx.accounts.user_position;
+        // Mark as claimed and update total claimed
         position.claimed = true;
+        position.claimed_amount = winnings;
+        market.total_claimed = market.total_claimed.checked_add(winnings).unwrap();
 
         emit!(WinningsClaimed {
             market: market.key(),
             bettor: ctx.accounts.bettor.key(),
-            amount: actual_transfer,
+            amount: winnings,
         });
+
+        Ok(())
+    }
+
+    /// Emergency function to return rent reserve to creator after all claims
+    pub fn close_market(ctx: Context<CloseMarket>) -> Result<()> {
+        let market = &ctx.accounts.market;
+        
+        require!(market.resolved, SeerError::MarketNotResolved);
+        
+        // Ensure enough time has passed (e.g., 30 days after resolution)
+        let current_time = Clock::get()?.unix_timestamp;
+        let min_close_time = market.end_time.checked_add(30 * 24 * 60 * 60).unwrap();
+        require!(current_time >= min_close_time, SeerError::TooEarlyToClose);
+
+        // Transfer remaining vault balance to creator
+        let vault_balance = ctx.accounts.market_vault.lamports();
+        
+        if vault_balance > 0 {
+            let market_key = market.key();
+            let seeds = &[
+                b"vault",
+                market_key.as_ref(),
+                &[ctx.bumps.market_vault],
+            ];
+            let signer = &[&seeds[..]];
+
+            **ctx.accounts.market_vault.try_borrow_mut_lamports()? = 0;
+            **ctx.accounts.creator.try_borrow_mut_lamports()? = ctx
+                .accounts
+                .creator
+                .lamports()
+                .checked_add(vault_balance)
+                .unwrap();
+        }
 
         Ok(())
     }
@@ -217,10 +288,48 @@ pub mod seer_program {
 // ============================================================================
 
 #[derive(Accounts)]
+pub struct InitializeConfig<'info> {
+    #[account(mut)]
+    pub authority: Signer<'info>,
+
+    #[account(
+        init,
+        payer = authority,
+        space = ProgramConfig::SPACE,
+        seeds = [b"config"],
+        bump
+    )]
+    pub config: Account<'info, ProgramConfig>,
+
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct UpdateConfig<'info> {
+    #[account(
+        constraint = authority.key() == config.authority @ SeerError::Unauthorized
+    )]
+    pub authority: Signer<'info>,
+
+    #[account(
+        mut,
+        seeds = [b"config"],
+        bump = config.bump
+    )]
+    pub config: Account<'info, ProgramConfig>,
+}
+
+#[derive(Accounts)]
 #[instruction(market_id: [u8; 32], question: String)]
 pub struct InitializeMarket<'info> {
     #[account(mut)]
     pub creator: Signer<'info>,
+
+    #[account(
+        seeds = [b"config"],
+        bump = config.bump
+    )]
+    pub config: Account<'info, ProgramConfig>,
 
     #[account(
         init,
@@ -233,15 +342,16 @@ pub struct InitializeMarket<'info> {
 
     /// CHECK: This is a PDA that will hold the funds
     #[account(
+        mut,
         seeds = [b"vault", market.key().as_ref()],
         bump
     )]
     pub market_vault: AccountInfo<'info>,
 
-    /// CHECK: Treasury account to receive market creation fees
+    /// CHECK: Treasury from config
     #[account(
         mut,
-        address = TREASURY.parse::<Pubkey>().unwrap() @ SeerError::InvalidTreasury
+        address = config.treasury @ SeerError::InvalidTreasury
     )]
     pub treasury: AccountInfo<'info>,
 
@@ -293,6 +403,7 @@ pub struct ClaimWinnings<'info> {
     pub bettor: Signer<'info>,
 
     #[account(
+        mut,
         constraint = market.resolved @ SeerError::MarketNotResolved
     )]
     pub market: Account<'info, Market>,
@@ -316,9 +427,47 @@ pub struct ClaimWinnings<'info> {
     pub system_program: Program<'info, System>,
 }
 
+#[derive(Accounts)]
+pub struct CloseMarket<'info> {
+    #[account(
+        mut,
+        constraint = creator.key() == market.creator @ SeerError::Unauthorized
+    )]
+    pub creator: Signer<'info>,
+
+    #[account(
+        constraint = market.resolved @ SeerError::MarketNotResolved
+    )]
+    pub market: Account<'info, Market>,
+
+    /// CHECK: This is a PDA vault
+    #[account(
+        mut,
+        seeds = [b"vault", market.key().as_ref()],
+        bump
+    )]
+    pub market_vault: AccountInfo<'info>,
+
+    pub system_program: Program<'info, System>,
+}
+
 // ============================================================================
 // STATE
 // ============================================================================
+
+#[account]
+pub struct ProgramConfig {
+    pub authority: Pubkey,      // 32 bytes - Program authority (can update config)
+    pub treasury: Pubkey,       // 32 bytes - Treasury address for fees
+    pub bump: u8,               // 1 byte - PDA bump
+}
+
+impl ProgramConfig {
+    pub const SPACE: usize = 8  // discriminator
+        + 32                    // authority
+        + 32                    // treasury
+        + 1;                    // bump
+}
 
 #[account]
 pub struct Market {
@@ -331,6 +480,7 @@ pub struct Market {
     pub end_time: i64,          // 8 bytes - Unix timestamp when betting ends
     pub bump: u8,               // 1 byte - PDA bump
     pub total_bettors: u32,     // 4 bytes - Number of unique bettors
+    pub total_claimed: u64,     // 8 bytes - Total amount claimed by winners
 }
 
 impl Market {
@@ -343,7 +493,8 @@ impl Market {
         + 1                     // outcome
         + 8                     // end_time
         + 1                     // bump
-        + 4;                    // total_bettors
+        + 4                     // total_bettors
+        + 8;                    // total_claimed
 }
 
 #[account]
@@ -354,6 +505,7 @@ pub struct UserPosition {
     pub no_amount: u64,         // 8 bytes - Amount bet on NO
     pub claimed: bool,          // 1 byte - Whether winnings claimed
     pub bump: u8,               // 1 byte - PDA bump
+    pub claimed_amount: u64,    // 8 bytes - Amount claimed
 }
 
 impl UserPosition {
@@ -363,7 +515,8 @@ impl UserPosition {
         + 8                     // yes_amount
         + 8                     // no_amount
         + 1                     // claimed
-        + 1;                    // bump
+        + 1                     // bump
+        + 8;                    // claimed_amount
 }
 
 // ============================================================================
@@ -443,4 +596,13 @@ pub enum SeerError {
 
     #[msg("Invalid treasury address")]
     InvalidTreasury,
+
+    #[msg("Insufficient balance in vault")]
+    InsufficientVaultBalance,
+
+    #[msg("Invalid winning pool amount")]
+    InvalidWinningPool,
+
+    #[msg("Too early to close market")]
+    TooEarlyToClose,
 }

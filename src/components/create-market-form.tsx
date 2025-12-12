@@ -25,19 +25,19 @@ async function hashQuestion(question: string): Promise<Uint8Array> {
 function getTimeUntil(endDate: Date): string {
   const now = new Date();
   const diff = endDate.getTime() - now.getTime();
-  
+
   if (diff <= 0) return "ended";
-  
+
   const hours = Math.floor(diff / (1000 * 60 * 60));
   const days = Math.floor(hours / 24);
   const weeks = Math.floor(days / 7);
   const months = Math.floor(days / 30);
-  
+
   if (months > 0) return `in ${months} month${months > 1 ? 's' : ''}`;
   if (weeks > 0) return `in ${weeks} week${weeks > 1 ? 's' : ''}`;
   if (days > 0) return `in ${days} day${days > 1 ? 's' : ''}`;
   if (hours > 0) return `in ${hours} hour${hours > 1 ? 's' : ''}`;
-  
+
   const minutes = Math.floor(diff / (1000 * 60));
   return `in ${minutes} minute${minutes > 1 ? 's' : ''}`;
 }
@@ -46,7 +46,7 @@ export default function CreateMarketForm() {
   const router = useRouter();
   const { publicKey, sendTransaction } = useWallet();
   const { connection } = useConnection();
-  
+
   const [question, setQuestion] = useState("");
   const [endDate, setEndDate] = useState("");
   const [endTime, setEndTime] = useState("");
@@ -72,7 +72,7 @@ export default function CreateMarketForm() {
       setSelectedPreset("Custom");
       return;
     }
-    
+
     const futureDate = new Date(Date.now() + hours * 60 * 60 * 1000);
     // Use local date components to avoid UTC/local time mismatch
     const year = futureDate.getFullYear();
@@ -80,7 +80,7 @@ export default function CreateMarketForm() {
     const day = String(futureDate.getDate()).padStart(2, '0');
     const hour = String(futureDate.getHours()).padStart(2, '0');
     const minute = String(futureDate.getMinutes()).padStart(2, '0');
-    
+
     setEndDate(`${year}-${month}-${day}`);
     setEndTime(`${hour}:${minute}`);
     setSelectedPreset(label);
@@ -99,7 +99,7 @@ export default function CreateMarketForm() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!publicKey) {
       setError("Please connect your wallet first");
       return;
@@ -147,6 +147,12 @@ export default function CreateMarketForm() {
         programId
       );
 
+      // Derive Config PDA (required for initialize_market)
+      const [configPda] = PublicKey.findProgramAddressSync(
+        [Buffer.from("config")],
+        programId
+      );
+
       // Derive Vault PDA
       const [vaultPda] = PublicKey.findProgramAddressSync(
         [Buffer.from("vault"), marketPda.toBuffer()],
@@ -156,15 +162,15 @@ export default function CreateMarketForm() {
       // Build instruction data
       // initialize_market discriminator: [35, 35, 189, 193, 155, 48, 170, 203]
       const discriminator = Buffer.from([35, 35, 189, 193, 155, 48, 170, 203]);
-      
+
       // market_id: [u8; 32]
       const marketIdBuffer = Buffer.from(marketIdHash);
-      
+
       // question: String (4 bytes length + utf8 bytes)
       const questionBytes = Buffer.from(question, "utf-8");
       const questionLenBuffer = Buffer.alloc(4);
       questionLenBuffer.writeUInt32LE(questionBytes.length);
-      
+
       // end_time: i64
       const endTimeBuffer = Buffer.alloc(8);
       endTimeBuffer.writeBigInt64LE(BigInt(endTimestamp));
@@ -179,10 +185,11 @@ export default function CreateMarketForm() {
 
       // Treasury account to receive creation fees
       const treasuryPubkey = new PublicKey(TREASURY_ADDRESS);
-      
+
       const transaction = new Transaction().add({
         keys: [
           { pubkey: publicKey, isSigner: true, isWritable: true },
+          { pubkey: configPda, isSigner: false, isWritable: false }, // Config PDA (must exist)
           { pubkey: marketPda, isSigner: false, isWritable: true },
           { pubkey: vaultPda, isSigner: false, isWritable: true },
           { pubkey: treasuryPubkey, isSigner: false, isWritable: true },
@@ -225,7 +232,7 @@ export default function CreateMarketForm() {
       }
 
       const signature = await sendTransaction(transaction, connection);
-      
+
       // Wait for confirmation
       await connection.confirmTransaction(signature, "confirmed");
 
@@ -233,7 +240,7 @@ export default function CreateMarketForm() {
       router.push(`/dashboard/market/${marketPda.toBase58()}`);
     } catch (e) {
       console.error("Error creating market:", e);
-      
+
       // Parse error message
       let errorMessage = "Failed to create market";
       if (e instanceof Error && e.message) {
@@ -249,7 +256,7 @@ export default function CreateMarketForm() {
           errorMessage = `Error: ${e.message}`;
         }
       }
-      
+
       setError(errorMessage);
     } finally {
       setLoading(false);
@@ -286,9 +293,8 @@ export default function CreateMarketForm() {
               className="w-full bg-void border-2 border-gray-700 focus:border-matrix text-white font-mono p-4 resize-none transition-colors outline-none"
               disabled={loading}
             />
-            <span className={`absolute bottom-2 right-2 text-xs font-mono ${
-              question.length > 180 ? "text-cyber" : "text-gray-500"
-            }`}>
+            <span className={`absolute bottom-2 right-2 text-xs font-mono ${question.length > 180 ? "text-cyber" : "text-gray-500"
+              }`}>
               {question.length}/200
             </span>
           </div>
@@ -304,7 +310,7 @@ export default function CreateMarketForm() {
             <span className="font-mono text-sm text-matrix">AI-POWERED RESOLUTION</span>
           </div>
           <p className="text-gray-400 text-xs font-mono">
-            After your market ends, our AI agent will analyze real-world data to suggest the outcome. 
+            After your market ends, our AI agent will analyze real-world data to suggest the outcome.
             You confirm the resolution to finalize it.
           </p>
         </div>
@@ -314,7 +320,7 @@ export default function CreateMarketForm() {
           <label className="block font-mono text-sm text-gray-400">
             MARKET END TIME
           </label>
-          
+
           {/* Quick Presets */}
           <div className="grid grid-cols-4 gap-2">
             {durationPresets.map((preset) => (
@@ -323,11 +329,10 @@ export default function CreateMarketForm() {
                 type="button"
                 onClick={() => applyPreset(preset.hours, preset.label)}
                 disabled={loading}
-                className={`py-2 px-3 text-xs font-mono border transition-all ${
-                  selectedPreset === preset.label
+                className={`py-2 px-3 text-xs font-mono border transition-all ${selectedPreset === preset.label
                     ? "border-matrix bg-matrix/20 text-matrix"
                     : "border-gray-700 text-gray-400 hover:border-gray-500 hover:text-white"
-                }`}
+                  }`}
               >
                 {preset.label}
               </button>

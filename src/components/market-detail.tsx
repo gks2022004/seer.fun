@@ -25,7 +25,7 @@ export default function MarketDetail({ marketId }: MarketDetailProps) {
   const { market, loading, error, refetch } = useSingleMarket(marketId);
   const { publicKey, sendTransaction } = useWallet();
   const { connection } = useConnection();
-  
+
   const [selectedSide, setSelectedSide] = useState<"yes" | "no" | null>(null);
   const [betAmount, setBetAmount] = useState<number>(0.1);
   const [customAmount, setCustomAmount] = useState("");
@@ -35,7 +35,7 @@ export default function MarketDetail({ marketId }: MarketDetailProps) {
   const [txError, setTxError] = useState<string | null>(null);
   const [txSuccess, setTxSuccess] = useState<string | null>(null);
   const [userPosition, setUserPosition] = useState<UserPosition | null>(null);
-  
+
   // AI Resolution state
   const [aiLoading, setAiLoading] = useState(false);
   const [aiSuggestion, setAiSuggestion] = useState<{
@@ -60,7 +60,7 @@ export default function MarketDetail({ marketId }: MarketDetailProps) {
         console.error("Error fetching market creation time:", e);
       }
     };
-    
+
     if (marketId) {
       fetchCreationTime();
     }
@@ -76,9 +76,9 @@ export default function MarketDetail({ marketId }: MarketDetailProps) {
     try {
       const marketPubkey = new PublicKey(marketId);
       const [positionPda] = getUserPositionPDA(marketPubkey, publicKey);
-      
+
       const accountInfo = await solanaConnection.getAccountInfo(positionPda);
-      
+
       if (!accountInfo) {
         setUserPosition(null);
         return;
@@ -118,19 +118,19 @@ export default function MarketDetail({ marketId }: MarketDetailProps) {
   // Calculate potential winnings
   const calculateWinnings = (): bigint => {
     if (!market || !userPosition || !market.resolved) return BigInt(0);
-    
+
     const totalPool = market.yesAmount + market.noAmount;
     const winningPool = market.outcome ? market.yesAmount : market.noAmount;
     const userBet = market.outcome ? userPosition.yesAmount : userPosition.noAmount;
-    
+
     if (winningPool === BigInt(0) || userBet === BigInt(0)) return BigInt(0);
-    
+
     return (userBet * totalPool) / winningPool;
   };
 
   const isWinner = (): boolean => {
     if (!market || !userPosition || !market.resolved) return false;
-    return market.outcome 
+    return market.outcome
       ? userPosition.yesAmount > BigInt(0)
       : userPosition.noAmount > BigInt(0);
   };
@@ -151,7 +151,7 @@ export default function MarketDetail({ marketId }: MarketDetailProps) {
       const discriminator = Buffer.from([161, 215, 24, 59, 14, 236, 242, 221]);
 
       const transaction = new Transaction();
-      
+
       // Add compute budget for priority
       const { ComputeBudgetProgram } = await import("@solana/web3.js");
       transaction.add(
@@ -162,7 +162,7 @@ export default function MarketDetail({ marketId }: MarketDetailProps) {
       transaction.add({
         keys: [
           { pubkey: publicKey, isSigner: true, isWritable: true },
-          { pubkey: marketPubkey, isSigner: false, isWritable: false },
+          { pubkey: marketPubkey, isSigner: false, isWritable: true }, // Market is mutable (tracks total_claimed)
           { pubkey: marketVault, isSigner: false, isWritable: true },
           { pubkey: positionPda, isSigner: false, isWritable: true },
           { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
@@ -180,7 +180,7 @@ export default function MarketDetail({ marketId }: MarketDetailProps) {
         skipPreflight: true,
         preflightCommitment: "confirmed",
       });
-      
+
       await connection.confirmTransaction({
         signature,
         blockhash,
@@ -189,7 +189,7 @@ export default function MarketDetail({ marketId }: MarketDetailProps) {
 
       const winnings = calculateWinnings();
       setTxSuccess(`Claimed ${formatSol(winnings)} SOL! Tx: ${signature.slice(0, 8)}...`);
-      
+
       // Refresh data
       fetchUserPosition();
       refetch();
@@ -333,8 +333,8 @@ export default function MarketDetail({ marketId }: MarketDetailProps) {
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       {/* Back Link */}
-      <Link 
-        href="/dashboard" 
+      <Link
+        href="/dashboard"
         className="inline-flex items-center text-gray-400 hover:text-matrix font-mono text-sm transition-colors"
       >
         ← BACK TO MARKETS
@@ -345,7 +345,7 @@ export default function MarketDetail({ marketId }: MarketDetailProps) {
         <div className="flex items-start justify-between mb-4">
           <MarketStatusBadge market={market} />
         </div>
-        
+
         <h1 className="font-vt323 text-2xl md:text-3xl text-white mb-4">
           {market.question}
         </h1>
@@ -361,7 +361,7 @@ export default function MarketDetail({ marketId }: MarketDetailProps) {
         </div>
 
         {/* Share Market */}
-        <ShareMarket 
+        <ShareMarket
           marketId={marketId}
           question={market.question}
           yesAmount={market.yesAmount}
@@ -393,11 +393,10 @@ export default function MarketDetail({ marketId }: MarketDetailProps) {
               <div className="grid grid-cols-2 gap-4">
                 <button
                   onClick={() => setSelectedSide("yes")}
-                  className={`p-4 border-2 transition-all ${
-                    selectedSide === "yes"
+                  className={`p-4 border-2 transition-all ${selectedSide === "yes"
                       ? "border-matrix bg-matrix/20 text-matrix"
                       : "border-gray-700 text-gray-400 hover:border-matrix/50"
-                  }`}
+                    }`}
                 >
                   <div className="text-3xl mb-2"></div>
                   <div className="font-vt323 text-xl">YES</div>
@@ -405,11 +404,10 @@ export default function MarketDetail({ marketId }: MarketDetailProps) {
                 </button>
                 <button
                   onClick={() => setSelectedSide("no")}
-                  className={`p-4 border-2 transition-all ${
-                    selectedSide === "no"
+                  className={`p-4 border-2 transition-all ${selectedSide === "no"
                       ? "border-cyber bg-cyber/20 text-cyber"
                       : "border-gray-700 text-gray-400 hover:border-cyber/50"
-                  }`}
+                    }`}
                 >
                   <div className="text-3xl mb-2"></div>
                   <div className="font-vt323 text-xl">NO</div>
@@ -429,17 +427,16 @@ export default function MarketDetail({ marketId }: MarketDetailProps) {
                           setBetAmount(amount);
                           setCustomAmount("");
                         }}
-                        className={`py-2 px-3 font-mono text-sm border transition-all ${
-                          betAmount === amount && !customAmount
+                        className={`py-2 px-3 font-mono text-sm border transition-all ${betAmount === amount && !customAmount
                             ? "border-matrix bg-matrix/20 text-matrix"
                             : "border-gray-700 text-gray-400 hover:border-matrix/50"
-                        }`}
+                          }`}
                       >
                         {amount} SOL
                       </button>
                     ))}
                   </div>
-                  
+
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-mono text-gray-400">CUSTOM:</span>
                     <input
@@ -461,11 +458,10 @@ export default function MarketDetail({ marketId }: MarketDetailProps) {
                 <button
                   onClick={handlePlaceBet}
                   disabled={placing}
-                  className={`w-full py-4 font-vt323 text-xl transition-all ${
-                    selectedSide === "yes"
+                  className={`w-full py-4 font-vt323 text-xl transition-all ${selectedSide === "yes"
                       ? "btn-glitch"
                       : "bg-cyber hover:bg-cyber/80 text-void"
-                  } disabled:opacity-50 disabled:cursor-not-allowed`}
+                    } disabled:opacity-50 disabled:cursor-not-allowed`}
                 >
                   {placing ? (
                     <span className="animate-pulse">PLACING BET...</span>
@@ -478,12 +474,12 @@ export default function MarketDetail({ marketId }: MarketDetailProps) {
               {/* Transaction Status */}
               {txError && (
                 <div className="border border-cyber bg-cyber/10 p-3 text-cyber font-mono text-sm">
-                   {txError}
+                  {txError}
                 </div>
               )}
               {txSuccess && (
                 <div className="border border-matrix bg-matrix/10 p-3 text-matrix font-mono text-sm">
-                   {txSuccess}
+                  {txSuccess}
                 </div>
               )}
             </div>
@@ -492,129 +488,125 @@ export default function MarketDetail({ marketId }: MarketDetailProps) {
       )}
 
       {/* Resolve Market Section - Only for creator when betting has ended */}
-      {publicKey && 
-       !market.resolved && 
-       market.creator === publicKey.toBase58() && 
-       Date.now() / 1000 >= Number(market.endTime) && (
-        <div className="border border-yellow-500 p-6 bg-yellow-500/10">
-          <h2 className="font-vt323 text-xl text-yellow-400 mb-2">RESOLVE MARKET</h2>
-          <p className="text-gray-400 font-mono text-sm mb-4">
-            As the market creator, you can now resolve this market. Choose the winning outcome:
-          </p>
+      {publicKey &&
+        !market.resolved &&
+        market.creator === publicKey.toBase58() &&
+        Date.now() / 1000 >= Number(market.endTime) && (
+          <div className="border border-yellow-500 p-6 bg-yellow-500/10">
+            <h2 className="font-vt323 text-xl text-yellow-400 mb-2">RESOLVE MARKET</h2>
+            <p className="text-gray-400 font-mono text-sm mb-4">
+              As the market creator, you can now resolve this market. Choose the winning outcome:
+            </p>
 
-          {/* AI Suggestion Section */}
-          <div className="mb-6 p-4 border border-purple-500/50 bg-purple-500/10">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="font-vt323 text-lg text-purple-400">AI RESOLUTION ASSISTANT</h3>
-              <button
-                onClick={handleGetAiSuggestion}
-                disabled={aiLoading}
-                className="px-4 py-2 border border-purple-500 bg-purple-500/20 text-purple-300 font-mono text-sm hover:bg-purple-500/30 transition-all disabled:opacity-50"
-              >
-                {aiLoading ? "ANALYZING..." : "GET AI SUGGESTION"}
-              </button>
-            </div>
-            
-            {aiError && (
-              <div className="text-cyber font-mono text-sm p-2 bg-cyber/10 border border-cyber/30">
-                {aiError}
-              </div>
-            )}
-            
-            {aiSuggestion && (
-              <div className="space-y-3">
-                <div className="flex items-center gap-4">
-                  <div className={`px-4 py-2 font-vt323 text-xl ${
-                    aiSuggestion.suggestedOutcome 
-                      ? "bg-matrix/20 border border-matrix text-matrix" 
-                      : "bg-cyber/20 border border-cyber text-cyber"
-                  }`}>
-                    AI SUGGESTS: {aiSuggestion.suggestedOutcome ? "YES" : "NO"}
-                  </div>
-                  <div className="font-mono text-sm">
-                    <span className="text-gray-400">Confidence:</span>{" "}
-                    <span className={`font-bold ${
-                      aiSuggestion.confidence >= 80 ? "text-matrix" :
-                      aiSuggestion.confidence >= 50 ? "text-yellow-400" : "text-cyber"
-                    }`}>
-                      {aiSuggestion.confidence}%
-                    </span>
-                  </div>
-                </div>
-                
-                <div className="text-gray-300 font-mono text-sm p-3 bg-void/50 border border-gray-700">
-                  <div className="text-gray-500 text-xs mb-1">REASONING:</div>
-                  {aiSuggestion.reasoning}
-                </div>
-                
-                {aiSuggestion.sources.length > 0 && (
-                  <div className="text-gray-400 font-mono text-xs">
-                    <span className="text-gray-500">Sources:</span> {aiSuggestion.sources.join(", ")}
-                  </div>
-                )}
-                
+            {/* AI Suggestion Section */}
+            <div className="mb-6 p-4 border border-purple-500/50 bg-purple-500/10">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-vt323 text-lg text-purple-400">AI RESOLUTION ASSISTANT</h3>
                 <button
-                  onClick={() => handleResolveMarket(aiSuggestion.suggestedOutcome)}
-                  disabled={resolving}
-                  className={`w-full py-3 font-vt323 text-lg transition-all disabled:opacity-50 ${
-                    aiSuggestion.suggestedOutcome
-                      ? "border-2 border-matrix bg-matrix/20 text-matrix hover:bg-matrix/30"
-                      : "border-2 border-cyber bg-cyber/20 text-cyber hover:bg-cyber/30"
-                  }`}
+                  onClick={handleGetAiSuggestion}
+                  disabled={aiLoading}
+                  className="px-4 py-2 border border-purple-500 bg-purple-500/20 text-purple-300 font-mono text-sm hover:bg-purple-500/30 transition-all disabled:opacity-50"
                 >
-                  {resolving ? "RESOLVING..." : `ACCEPT AI: RESOLVE AS ${aiSuggestion.suggestedOutcome ? "YES" : "NO"}`}
+                  {aiLoading ? "ANALYZING..." : "GET AI SUGGESTION"}
                 </button>
               </div>
+
+              {aiError && (
+                <div className="text-cyber font-mono text-sm p-2 bg-cyber/10 border border-cyber/30">
+                  {aiError}
+                </div>
+              )}
+
+              {aiSuggestion && (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-4">
+                    <div className={`px-4 py-2 font-vt323 text-xl ${aiSuggestion.suggestedOutcome
+                        ? "bg-matrix/20 border border-matrix text-matrix"
+                        : "bg-cyber/20 border border-cyber text-cyber"
+                      }`}>
+                      AI SUGGESTS: {aiSuggestion.suggestedOutcome ? "YES" : "NO"}
+                    </div>
+                    <div className="font-mono text-sm">
+                      <span className="text-gray-400">Confidence:</span>{" "}
+                      <span className={`font-bold ${aiSuggestion.confidence >= 80 ? "text-matrix" :
+                          aiSuggestion.confidence >= 50 ? "text-yellow-400" : "text-cyber"
+                        }`}>
+                        {aiSuggestion.confidence}%
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="text-gray-300 font-mono text-sm p-3 bg-void/50 border border-gray-700">
+                    <div className="text-gray-500 text-xs mb-1">REASONING:</div>
+                    {aiSuggestion.reasoning}
+                  </div>
+
+                  {aiSuggestion.sources.length > 0 && (
+                    <div className="text-gray-400 font-mono text-xs">
+                      <span className="text-gray-500">Sources:</span> {aiSuggestion.sources.join(", ")}
+                    </div>
+                  )}
+
+                  <button
+                    onClick={() => handleResolveMarket(aiSuggestion.suggestedOutcome)}
+                    disabled={resolving}
+                    className={`w-full py-3 font-vt323 text-lg transition-all disabled:opacity-50 ${aiSuggestion.suggestedOutcome
+                        ? "border-2 border-matrix bg-matrix/20 text-matrix hover:bg-matrix/30"
+                        : "border-2 border-cyber bg-cyber/20 text-cyber hover:bg-cyber/30"
+                      }`}
+                  >
+                    {resolving ? "RESOLVING..." : `ACCEPT AI: RESOLVE AS ${aiSuggestion.suggestedOutcome ? "YES" : "NO"}`}
+                  </button>
+                </div>
+              )}
+
+              {!aiSuggestion && !aiError && !aiLoading && (
+                <p className="text-gray-500 font-mono text-xs">
+                  Click &quot;Get AI Suggestion&quot; to analyze real-world data and get a resolution recommendation using Perplexity AI.
+                </p>
+              )}
+            </div>
+
+            <div className="border-t border-yellow-500/30 pt-4 mt-4">
+              <p className="text-gray-500 font-mono text-xs mb-3">Or resolve manually:</p>
+              <div className="grid grid-cols-2 gap-4 mb-4">
+                <button
+                  onClick={() => handleResolveMarket(true)}
+                  disabled={resolving}
+                  className="py-4 border-2 border-matrix bg-matrix/20 text-matrix font-vt323 text-xl hover:bg-matrix/30 transition-all disabled:opacity-50"
+                >
+                  {resolving ? "RESOLVING..." : "RESOLVE: YES WINS"}
+                </button>
+                <button
+                  onClick={() => handleResolveMarket(false)}
+                  disabled={resolving}
+                  className="py-4 border-2 border-cyber bg-cyber/20 text-cyber font-vt323 text-xl hover:bg-cyber/30 transition-all disabled:opacity-50"
+                >
+                  {resolving ? "RESOLVING..." : "RESOLVE: NO WINS"}
+                </button>
+              </div>
+            </div>
+
+            {/* Transaction Status */}
+            {txError && (
+              <div className="border border-cyber bg-cyber/10 p-3 text-cyber font-mono text-sm">
+                {txError}
+              </div>
             )}
-            
-            {!aiSuggestion && !aiError && !aiLoading && (
-              <p className="text-gray-500 font-mono text-xs">
-                Click &quot;Get AI Suggestion&quot; to analyze real-world data and get a resolution recommendation using Perplexity AI.
-              </p>
+            {txSuccess && (
+              <div className="border border-matrix bg-matrix/10 p-3 text-matrix font-mono text-sm">
+                {txSuccess}
+              </div>
             )}
           </div>
-
-          <div className="border-t border-yellow-500/30 pt-4 mt-4">
-            <p className="text-gray-500 font-mono text-xs mb-3">Or resolve manually:</p>
-            <div className="grid grid-cols-2 gap-4 mb-4">
-              <button
-                onClick={() => handleResolveMarket(true)}
-                disabled={resolving}
-                className="py-4 border-2 border-matrix bg-matrix/20 text-matrix font-vt323 text-xl hover:bg-matrix/30 transition-all disabled:opacity-50"
-              >
-                {resolving ? "RESOLVING..." : "RESOLVE: YES WINS"}
-              </button>
-              <button
-                onClick={() => handleResolveMarket(false)}
-                disabled={resolving}
-                className="py-4 border-2 border-cyber bg-cyber/20 text-cyber font-vt323 text-xl hover:bg-cyber/30 transition-all disabled:opacity-50"
-              >
-                {resolving ? "RESOLVING..." : "RESOLVE: NO WINS"}
-              </button>
-            </div>
-          </div>
-
-          {/* Transaction Status */}
-          {txError && (
-            <div className="border border-cyber bg-cyber/10 p-3 text-cyber font-mono text-sm">
-               {txError}
-            </div>
-          )}
-          {txSuccess && (
-            <div className="border border-matrix bg-matrix/10 p-3 text-matrix font-mono text-sm">
-               {txSuccess}
-            </div>
-          )}
-        </div>
-      )}
+        )}
 
       {/* Market Resolved */}
       {market.resolved && (
-        <div className={`border p-6 ${
-          market.outcome 
-            ? "border-matrix bg-matrix/10" 
+        <div className={`border p-6 ${market.outcome
+            ? "border-matrix bg-matrix/10"
             : "border-cyber bg-cyber/10"
-        }`}>
+          }`}>
           <h2 className="font-vt323 text-xl mb-2">
             MARKET RESOLVED: {market.outcome ? "YES" : "NO"} WON
           </h2>
@@ -626,15 +618,14 @@ export default function MarketDetail({ marketId }: MarketDetailProps) {
 
       {/* User Position & Claim Section */}
       {publicKey && userPosition && (userPosition.yesAmount > BigInt(0) || userPosition.noAmount > BigInt(0)) && (
-        <div className={`border p-6 ${
-          market.resolved
+        <div className={`border p-6 ${market.resolved
             ? isWinner()
               ? "border-matrix bg-matrix/5"
               : "border-cyber bg-cyber/5"
             : "border-yellow-500/30 bg-yellow-500/5"
-        }`}>
+          }`}>
           <h2 className="font-vt323 text-xl text-white mb-4">YOUR POSITION</h2>
-          
+
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
             <div className="bg-void/50 p-3 border border-gray-800">
               <div className="text-gray-500 text-xs font-mono">YOUR YES BET</div>
@@ -658,11 +649,10 @@ export default function MarketDetail({ marketId }: MarketDetailProps) {
               <div className="text-gray-500 text-xs font-mono">
                 {market.resolved ? (isWinner() ? "WINNINGS" : "RESULT") : "POTENTIAL WIN"}
               </div>
-              <div className={`font-vt323 text-xl ${
-                market.resolved 
+              <div className={`font-vt323 text-xl ${market.resolved
                   ? isWinner() ? "text-matrix" : "text-cyber"
                   : "text-yellow-400"
-              }`}>
+                }`}>
                 {market.resolved
                   ? isWinner()
                     ? `${formatSol(calculateWinnings())} SOL`

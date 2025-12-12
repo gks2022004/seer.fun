@@ -55,7 +55,7 @@ export function useMarkets() {
       setError(null);
 
       const programId = new PublicKey(SEER_PROGRAM_ID);
-      
+
       // Get all program accounts with Market discriminator
       const accounts = await connection.getProgramAccounts(programId, {
         filters: [
@@ -71,6 +71,7 @@ export function useMarkets() {
       console.log(`Found ${accounts.length} market accounts`);
 
       const marketsData: MarketWithPubkey[] = [];
+      let skippedCount = 0;
 
       for (const { pubkey } of accounts) {
         try {
@@ -80,10 +81,19 @@ export function useMarkets() {
               ...market,
               pubkey: pubkey.toBase58(),
             });
+          } else {
+            skippedCount++;
           }
-        } catch (e) {
-          console.error("Error parsing market:", pubkey.toBase58(), e);
+        } catch {
+          console.warn("Skipping incompatible market:", pubkey.toBase58());
+          skippedCount++;
         }
+      }
+
+      if (skippedCount > 0) {
+        console.log(`✓ Loaded ${marketsData.length} markets (${skippedCount} old/incompatible markets filtered out)`);
+      } else {
+        console.log(`✓ Loaded ${marketsData.length} markets`);
       }
 
       // Sort by end time (most recent first)
@@ -149,7 +159,7 @@ export function useSingleMarket(marketId: string | null) {
 // Helper components for displaying market data
 export function MarketOddsBar({ yesAmount, noAmount }: { yesAmount: bigint; noAmount: bigint }) {
   const odds = calculateOdds(yesAmount, noAmount);
-  
+
   return (
     <div className="w-full">
       <div className="flex justify-between text-xs font-mono mb-1">
@@ -157,11 +167,11 @@ export function MarketOddsBar({ yesAmount, noAmount }: { yesAmount: bigint; noAm
         <span className="text-cyber">NO {odds.no}%</span>
       </div>
       <div className="h-2 bg-gray-800 rounded-sm overflow-hidden flex">
-        <div 
+        <div
           className="bg-matrix h-full transition-all duration-500"
           style={{ width: `${odds.yes}%` }}
         />
-        <div 
+        <div
           className="bg-cyber h-full transition-all duration-500"
           style={{ width: `${odds.no}%` }}
         />
@@ -173,7 +183,7 @@ export function MarketOddsBar({ yesAmount, noAmount }: { yesAmount: bigint; noAm
 export function MarketStats({ market }: { market: MarketAccount }) {
   const totalPool = formatSol(market.yesAmount + market.noAmount);
   const timeRemaining = formatTimeRemaining(market.endTime);
-  
+
   return (
     <div className="grid grid-cols-3 gap-2 text-xs font-mono">
       <div className="bg-void/50 p-2 border border-gray-800">
@@ -197,9 +207,8 @@ export function MarketStats({ market }: { market: MarketAccount }) {
 export function MarketStatusBadge({ market }: { market: MarketAccount }) {
   if (market.resolved) {
     return (
-      <span className={`px-2 py-0.5 text-xs font-mono ${
-        market.outcome ? "bg-matrix/20 text-matrix" : "bg-cyber/20 text-cyber"
-      }`}>
+      <span className={`px-2 py-0.5 text-xs font-mono ${market.outcome ? "bg-matrix/20 text-matrix" : "bg-cyber/20 text-cyber"
+        }`}>
         {market.outcome ? "YES WON" : "NO WON"}
       </span>
     );

@@ -1,8 +1,8 @@
 // Seer Program IDL - Simplified (AI-Resolved Markets)
-export const SEER_PROGRAM_ID = "5XrAkDuDwvsqVxMkVETukYdAjuACH3poCAcP4hZJoKSQ";
+export const SEER_PROGRAM_ID = "R8Q5AaY9CnWqnhobPQ9LtTGewdpnJ3NoGNGxyKicqfg";
 
 export const SEER_IDL = {
-  address: "BwGjxxo2jjAE1aACq4L74L2WzaLjFrxuvvbTMxHyrKbS",
+  address: "R8Q5AaY9CnWqnhobPQ9LtTGewdpnJ3NoGNGxyKicqfg",
   metadata: {
     name: "seer_program",
     version: "0.1.0",
@@ -137,6 +137,7 @@ export const SEER_IDL = {
           { name: "end_time", type: "i64" },
           { name: "bump", type: "u8" },
           { name: "total_bettors", type: "u32" },
+          { name: "total_claimed", type: "u64" },
         ],
       },
     },
@@ -151,6 +152,7 @@ export const SEER_IDL = {
           { name: "no_amount", type: "u64" },
           { name: "claimed", type: "bool" },
           { name: "bump", type: "u8" },
+          { name: "claimed_amount", type: "u64" },
         ],
       },
     },
@@ -168,4 +170,5 @@ export interface MarketAccount {
   endTime: bigint;
   bump: number;
   totalBettors: number;
+  totalClaimed: bigint;
 }

@@ -49,7 +49,7 @@ export async function fetchMarketAccount(
     }
 
     const data = accountInfo.data;
-    
+
     // Skip 8-byte discriminator
     let offset = 8;
 
@@ -90,6 +90,10 @@ export async function fetchMarketAccount(
 
     // Total bettors (4 bytes u32)
     const totalBettors = data.readUInt32LE(offset);
+    offset += 4;
+
+    // Total claimed (8 bytes u64)
+    const totalClaimed = data.readBigUInt64LE(offset);
 
     return {
       creator,
@@ -101,6 +105,7 @@ export async function fetchMarketAccount(
       endTime,
       bump,
       totalBettors,
+      totalClaimed,
     };
   } catch (error) {
     console.error("Error fetching market account:", error);
@@ -150,12 +155,12 @@ export async function createBetTransaction(
   betYes: boolean
 ): Promise<Transaction> {
   const transaction = new Transaction();
-  
+
   const amountLamports = Math.floor(amountSol * LAMPORTS_PER_SOL);
   const instruction = createPlaceBetInstruction(bettor, market, amountLamports, betYes);
-  
+
   transaction.add(instruction);
-  
+
   // Get latest blockhash
   const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
   transaction.recentBlockhash = blockhash;
@@ -174,26 +179,26 @@ export async function createBetVersionedTransaction(
 ): Promise<VersionedTransaction> {
   const amountLamports = Math.floor(amountSol * LAMPORTS_PER_SOL);
   const instruction = createPlaceBetInstruction(bettor, market, amountLamports, betYes);
-  
+
   // Add priority fee instructions for faster confirmation
   const computeUnitPrice = ComputeBudgetProgram.setComputeUnitPrice({
     microLamports: 50000, // Priority fee
   });
-  
+
   const computeUnitLimit = ComputeBudgetProgram.setComputeUnitLimit({
     units: 200000, // Compute units
   });
-  
+
   // Get latest blockhash with "confirmed" commitment for faster confirmation
   const { blockhash } = await connection.getLatestBlockhash("confirmed");
-  
+
   // Create a transaction message with priority fee instructions first
   const message = new TransactionMessage({
     payerKey: bettor,
     recentBlockhash: blockhash,
     instructions: [computeUnitPrice, computeUnitLimit, instruction],
   }).compileToV0Message();
-  
+
   // Create and return a versioned transaction
   return new VersionedTransaction(message);
 }
@@ -201,9 +206,9 @@ export async function createBetVersionedTransaction(
 // Format SOL amount for display
 export function formatSol(lamports: bigint | number): string {
   const sol = Number(lamports) / LAMPORTS_PER_SOL;
-  return sol.toLocaleString("en-US", { 
-    minimumFractionDigits: 2, 
-    maximumFractionDigits: 2 
+  return sol.toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
   });
 }
 
@@ -283,10 +288,10 @@ export function createResolveMarketInstruction(
 ): TransactionInstruction {
   // resolve_market discriminator: [155, 23, 80, 173, 46, 74, 23, 239]
   const discriminator = Buffer.from([155, 23, 80, 173, 46, 74, 23, 239]);
-  
+
   // Serialize outcome (1 byte bool)
   const outcomeBuffer = Buffer.from([outcome ? 1 : 0]);
-  
+
   const data = Buffer.concat([discriminator, outcomeBuffer]);
 
   return new TransactionInstruction({
